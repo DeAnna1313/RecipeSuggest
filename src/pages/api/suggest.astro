@@ -1,0 +1,93 @@
+---
+import { suggestRecipes, type Recipe } from "../../lib/recipes";
+
+// Only POST allowed
+if (Astro.request.method !== "POST") {
+  return new Response("Method not allowed", { status: 405 });
+}
+
+let recipes: Recipe[] = [];
+let error = "";
+
+try {
+  const formData = await Astro.request.formData();
+  const ingredientsRaw = formData.get("ingredients")?.toString() ?? "";
+  const ingredients = ingredientsRaw
+    .split(",")
+    .map((i) => i.trim())
+    .filter(Boolean);
+
+  if (ingredients.length === 0) {
+    error = "Please add at least one ingredient.";
+  } else {
+    recipes = await suggestRecipes(ingredients);
+  }
+} catch (e: any) {
+  error = e.message ?? "Something went wrong. Please try again.";
+}
+
+function difficultyClass(d: string) {
+  if (d === "easy") return "badge--easy";
+  if (d === "hard") return "badge--hard";
+  return "badge--medium";
+}
+
+// Encode recipe data safely as base64 to avoid attribute quote issues
+function encodeRecipe(recipe: Recipe): string {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(recipe))));
+}
+---
+
+{
+  error ? (
+    <div class="error-message">{error}</div>
+  ) : (
+    <div class="recipe-grid">
+      {recipes.map((recipe) => (
+        <div
+          class="recipe-card"
+          role="button"
+          tabindex="0"
+          data-recipe={encodeRecipe(recipe)}
+          onclick="window.dispatchEvent(new CustomEvent('open-recipe', { detail: JSON.parse(decodeURIComponent(escape(atob(this.dataset.recipe)))) }))"
+          onkeydown="if(event.key==='Enter') window.dispatchEvent(new CustomEvent('open-recipe', { detail: JSON.parse(decodeURIComponent(escape(atob(this.dataset.recipe)))) }))"
+        >
+          <div class="recipe-card__header">
+            <h3 class="recipe-card__title">{recipe.title}</h3>
+            <button
+              class="recipe-card__bookmark"
+              data-recipe={encodeRecipe(recipe)}
+              data-recipe-id={recipe.id}
+              onclick="event.stopPropagation(); window.handleBookmark(this)"
+              aria-label="Toggle bookmark"
+            >
+              <span>☆</span>
+            </button>
+          </div>
+          <p class="recipe-card__desc">{recipe.description}</p>
+          <div class="recipe-card__meta">
+            <span class="recipe-card__time">⏱ {recipe.cookTime}</span>
+            <span class={`badge ${difficultyClass(recipe.difficulty)}`}>
+              {recipe.difficulty}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+<script>
+  // Initialize bookmark button states after HTMX swaps in this partial
+  document.querySelectorAll(".recipe-card__bookmark").forEach((btn) => {
+    const id = (btn as HTMLElement).dataset.recipeId;
+    const bookmarks = JSON.parse(
+      localStorage.getItem("recipesuggest_bookmarks") || "[]",
+    );
+    const isBookmarked = bookmarks.some((r: any) => r.id === id);
+    if (isBookmarked) {
+      btn.classList.add("is-bookmarked");
+      btn.querySelector("span")!.textContent = "★";
+    }
+  });
+</script>

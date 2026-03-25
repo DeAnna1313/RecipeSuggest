@@ -1,0 +1,29 @@
+---
+interface Props {
+  title?: string;
+}
+const { title = 'RecipeSuggest — AI Recipe Finder' } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Type your ingredients and get AI-powered recipe suggestions instantly." />
+    <title>{title}</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet" />
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+
+    <!-- Global styles -->
+    <link rel="stylesheet" href="/styles/global.css" />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

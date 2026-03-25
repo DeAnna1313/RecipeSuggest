@@ -1,0 +1,311 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base>
+  <div class="container" x-data="recipeApp">
+
+    <!-- ─── Header ─────────────────────────────── -->
+    <header class="site-header">
+      <a href="/" class="site-header__logo">
+        <span class="site-header__logo-icon">🍳</span>
+        RecipeSuggest
+      </a>
+      <p class="site-header__tagline">Type your ingredients. Get instant recipe ideas.</p>
+    </header>
+
+    <!-- ─── Ingredient Input Panel ─────────────── -->
+    <section class="ingredient-panel">
+      <label class="ingredient-panel__label" for="ingredient-input">
+        What's in your kitchen?
+      </label>
+
+      <div class="ingredient-input-row">
+        <input
+          id="ingredient-input"
+          class="ingredient-input"
+          type="text"
+          placeholder="e.g. chicken, garlic, lemon…"
+          x-model="currentInput"
+          @keydown.enter.prevent="addIngredient()"
+          @keydown.comma.prevent="addIngredient()"
+          autocomplete="off"
+        />
+        <button class="btn btn--add" type="button" @click="addIngredient()">
+          + Add
+        </button>
+      </div>
+
+      <!-- Tag list -->
+      <div class="tag-list" x-show="ingredients.length > 0">
+        <template x-for="(item, idx) in ingredients" :key="idx">
+          <span class="tag">
+            <span x-text="item"></span>
+            <button class="tag__remove" @click="removeIngredient(idx)" aria-label="Remove ingredient">×</button>
+          </span>
+        </template>
+      </div>
+
+      <!-- Actions -->
+      <div class="ingredient-panel__actions">
+        <span class="ingredient-panel__count" x-show="ingredients.length > 0">
+          <span x-text="ingredients.length"></span> ingredient<span x-show="ingredients.length !== 1">s</span>
+        </span>
+
+        <form
+          id="suggest-form"
+          hx-post="/api/suggest"
+          hx-target="#recipe-results"
+          hx-swap="innerHTML"
+          hx-indicator="#recipe-results"
+          @htmx:before-request="onBeforeRequest($event)"
+        >
+          <input type="hidden" name="ingredients" :value="ingredients.join(',')" />
+          <button
+            class="btn btn--primary"
+            type="submit"
+            :disabled="ingredients.length === 0 || loading"
+            x-text="loading ? 'Finding recipes…' : '✨ Suggest Recipes'"
+          ></button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ─── Bookmarks Section ──────────────────── -->
+    <section
+      class="bookmarks-section"
+      x-data="{ showBookmarks: false }"
+      x-show="$store.bookmarks.list.length > 0"
+    >
+      <button
+        class="bookmarks-toggle"
+        @click="showBookmarks = !showBookmarks"
+      >
+        <span x-text="showBookmarks ? '▾' : '▸'"></span>
+        Bookmarked Recipes
+        <span class="bookmarks-toggle__count" x-text="$store.bookmarks.list.length"></span>
+      </button>
+
+      <div class="recipe-grid" x-show="showBookmarks" x-transition>
+        <template x-for="recipe in $store.bookmarks.list" :key="recipe.id">
+          <div
+            class="recipe-card"
+            role="button"
+            tabindex="0"
+            @click="$dispatch('open-recipe', recipe)"
+            @keydown.enter="$dispatch('open-recipe', recipe)"
+          >
+            <div class="recipe-card__header">
+              <h3 class="recipe-card__title" x-text="recipe.title"></h3>
+              <button
+                class="recipe-card__bookmark is-bookmarked"
+                @click.stop="$store.bookmarks.toggle(recipe)"
+                title="Remove bookmark"
+                aria-label="Remove bookmark"
+              >★</button>
+            </div>
+            <p class="recipe-card__desc" x-text="recipe.description"></p>
+            <div class="recipe-card__meta">
+              <span class="recipe-card__time" x-text="'⏱ ' + recipe.cookTime"></span>
+              <span
+                class="badge"
+                :class="{
+                  'badge--easy': recipe.difficulty === 'easy',
+                  'badge--medium': recipe.difficulty === 'medium',
+                  'badge--hard': recipe.difficulty === 'hard'
+                }"
+                x-text="recipe.difficulty"
+              ></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- ─── Results Area ───────────────────────── -->
+    <section class="recipes-section">
+      <div id="recipe-results">
+        <div class="empty-state">
+          <div class="empty-state__icon">🥘</div>
+          <p class="empty-state__text">Add your ingredients above and hit <strong>Suggest Recipes</strong> to get started.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Recipe Detail Modal ────────────────── -->
+    <div
+      class="modal-backdrop"
+      x-show="modalOpen"
+      x-transition:enter="fadeIn"
+      @click.self="modalOpen = false"
+      @keydown.escape.window="modalOpen = false"
+      @open-recipe.window="openModal($event.detail)"
+      style="display: none;"
+    >
+      <div class="modal" @click.stop>
+        <button class="modal__close" @click="modalOpen = false" aria-label="Close modal">×</button>
+
+        <h2 class="modal__title" x-text="activeRecipe.title"></h2>
+        <p class="modal__desc" x-text="activeRecipe.description"></p>
+
+        <div class="modal__meta">
+          <div class="modal__meta-item">
+            <span>⏱</span>
+            <span x-text="activeRecipe.cookTime"></span>
+          </div>
+          <div class="modal__meta-item">
+            <span
+              class="badge"
+              :class="{
+                'badge--easy': activeRecipe.difficulty === 'easy',
+                'badge--medium': activeRecipe.difficulty === 'medium',
+                'badge--hard': activeRecipe.difficulty === 'hard'
+              }"
+              x-text="activeRecipe.difficulty"
+            ></span>
+          </div>
+        </div>
+
+        <h3 class="modal__section-title">Ingredients</h3>
+        <div class="modal__ingredients">
+          <template x-for="ing in activeRecipe.ingredients" :key="ing">
+            <span class="modal__ingredient" x-text="ing"></span>
+          </template>
+        </div>
+
+        <h3 class="modal__section-title">Instructions</h3>
+        <ol class="modal__steps">
+          <template x-for="step in activeRecipe.instructions" :key="step">
+            <li class="modal__step">
+              <span class="modal__step-text" x-text="step"></span>
+            </li>
+          </template>
+        </ol>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─── Alpine.js App Logic ────────────────── -->
+  <script>
+    // ── Global bookmark handler (used by HTMX-rendered cards) ────────
+    window.handleBookmark = function(btn) {
+      const recipe = JSON.parse(decodeURIComponent(escape(atob(btn.dataset.recipe))));
+      const key = 'recipesuggest_bookmarks';
+      let bookmarks = JSON.parse(localStorage.getItem(key) || '[]');
+      const exists = bookmarks.some(r => r.id === recipe.id);
+
+      if (exists) {
+        bookmarks = bookmarks.filter(r => r.id !== recipe.id);
+        btn.classList.remove('is-bookmarked');
+        btn.querySelector('span').textContent = '☆';
+      } else {
+        bookmarks.push(recipe);
+        btn.classList.add('is-bookmarked');
+        btn.querySelector('span').textContent = '★';
+      }
+      localStorage.setItem(key, JSON.stringify(bookmarks));
+
+      // Sync Alpine bookmark store if available
+      if (window.Alpine) {
+        Alpine.store('bookmarks').list = bookmarks;
+      }
+    };
+
+    // Re-initialize bookmark buttons after HTMX swaps in new content
+    document.body.addEventListener('htmx:afterSwap', () => {
+      const key = 'recipesuggest_bookmarks';
+      const bookmarks = JSON.parse(localStorage.getItem(key) || '[]');
+      document.querySelectorAll('.recipe-card__bookmark[data-recipe-id]').forEach(btn => {
+        const id = btn.dataset.recipeId;
+        const isBookmarked = bookmarks.some(r => r.id === id);
+        if (isBookmarked) {
+          btn.classList.add('is-bookmarked');
+          btn.querySelector('span').textContent = '★';
+        }
+      });
+    });
+
+    document.addEventListener('alpine:init', () => {
+      // Bookmark store persisted in localStorage
+      Alpine.store('bookmarks', {
+        list: JSON.parse(localStorage.getItem('recipesuggest_bookmarks') || '[]'),
+
+        has(id) {
+          return this.list.some(r => r.id === id);
+        },
+
+        toggle(recipe) {
+          if (this.has(recipe.id)) {
+            this.list = this.list.filter(r => r.id !== recipe.id);
+          } else {
+            this.list = [...this.list, recipe];
+          }
+          localStorage.setItem('recipesuggest_bookmarks', JSON.stringify(this.list));
+        }
+      });
+    });
+
+    document.addEventListener('alpine:init', () => {
+      Alpine.data('recipeApp', () => ({
+        ingredients: [],
+        currentInput: '',
+        loading: false,
+        modalOpen: false,
+        activeRecipe: {
+          title: '',
+          description: '',
+          cookTime: '',
+          difficulty: 'easy',
+          ingredients: [],
+          instructions: [],
+        },
+
+        addIngredient() {
+          const val = this.currentInput.trim().replace(/,/g, '');
+          if (val && !this.ingredients.includes(val.toLowerCase())) {
+            this.ingredients.push(val.toLowerCase());
+          }
+          this.currentInput = '';
+        },
+
+        removeIngredient(idx) {
+          this.ingredients.splice(idx, 1);
+        },
+
+        onBeforeRequest(evt) {
+          this.loading = true;
+          // Show skeleton loading
+          const target = document.getElementById('recipe-results');
+          if (target) {
+            target.innerHTML = `
+              <div class="skeleton-grid">
+                ${[1,2,3,4].map(() => `
+                  <div class="skeleton-card">
+                    <div class="skeleton-line skeleton-line--title"></div>
+                    <div class="skeleton-line skeleton-line--text"></div>
+                    <div class="skeleton-line skeleton-line--text"></div>
+                    <div class="skeleton-line skeleton-line--short"></div>
+                    <div class="skeleton-line skeleton-line--meta"></div>
+                  </div>
+                `).join('')}
+              </div>
+            `;
+          }
+        },
+
+        openModal(recipe) {
+          this.activeRecipe = recipe;
+          this.modalOpen = true;
+        },
+
+        init() {
+          // Reset loading state when HTMX finishes
+          document.body.addEventListener('htmx:afterRequest', () => {
+            this.loading = false;
+          });
+        }
+      }));
+    });
+  </script>
+</Base>
