@@ -1,0 +1,40 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.10.1
+2 info using node@v25.7.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest\.npm-cache\_npx\52027bd8fc0022aa\node_modules\node\.npmrc
+5 silly config load:file:C:\Users\DeAnna\.npmrc
+6 silly config load:file:C:\Users\DeAnna\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm install node-win-x64@22.22.2
+8 verbose argv "install" "--no-save" "node-win-x64@22.22.2"
+9 verbose logfile logs-max:10 dir:C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest\.npm-cache\_logs\2026-03-26T05_21_04_508Z-
+10 verbose logfile C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest\.npm-cache\_logs\2026-03-26T05_21_04_508Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly idealTree buildDeps
+14 silly fetch manifest node-bin-setup@^1.0.0
+15 silly packumentCache full:https://registry.npmjs.org/node-bin-setup cache-miss
+16 http cache https://registry.npmjs.org/node-bin-setup 15ms (cache hit)
+17 silly packumentCache full:https://registry.npmjs.org/node-bin-setup set size:17527 disposed:false
+18 silly fetch manifest node-win-x64@22.22.2
+19 silly packumentCache full:https://registry.npmjs.org/node-win-x64 cache-miss
+20 http fetch GET 200 https://registry.npmjs.org/node-win-x64 164ms (cache miss)
+21 silly packumentCache full:https://registry.npmjs.org/node-win-x64 set size:undefined disposed:false
+22 silly placeDep ROOT node-bin-setup@1.1.4 OK for: node@22.22.2 want: ^1.0.0
+23 silly placeDep ROOT node-win-x64@22.22.2 OK for: node@22.22.2 want: 22.22.2
+24 silly reify moves {}
+25 silly audit bulk request { 'node-bin-setup': [ '1.1.4' ], 'node-win-x64': [ '22.22.2' ] }
+26 http cache node-bin-setup@https://registry.npmjs.org/node-bin-setup/-/node-bin-setup-1.1.4.tgz 0ms (cache hit)
+27 http cache node-win-x64@https://registry.npmjs.org/node-win-x64/-/node-win-x64-22.22.2.tgz 0ms (cache hit)
+28 silly tarball no local data for node-win-x64@https://registry.npmjs.org/node-win-x64/-/node-win-x64-22.22.2.tgz. Extracting by manifest.
+29 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 49ms
+30 silly audit report {}
+31 http fetch GET 200 https://registry.npmjs.org/node-win-x64/-/node-win-x64-22.22.2.tgz 844ms (cache miss)
+32 silly ADD node_modules/node-win-x64
+33 silly ADD node_modules/node-bin-setup
+34 verbose cwd C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest\.npm-cache\_npx\52027bd8fc0022aa\node_modules\node
+35 verbose os Windows_NT 10.0.26200
+36 verbose node v25.7.0
+37 verbose npm  v11.10.1
+38 verbose exit 0
+39 info ok

@@ -1,0 +1,42 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.10.1
+2 info using node@v25.7.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest\.npmrc
+5 silly config load:file:C:\Users\DeAnna\.npmrc
+6 silly config load:file:C:\Users\DeAnna\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm exec node .\node_modules\astro\bin\astro.mjs build
+8 verbose argv "exec" "--package" "node@22" "--" "node" ".\\node_modules\\astro\\bin\\astro.mjs" "build"
+9 verbose logfile logs-max:10 dir:C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest\.npm-cache\_logs\2026-03-26T05_21_25_119Z-
+10 verbose logfile C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest\.npm-cache\_logs\2026-03-26T05_21_25_119Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 http fetch GET 200 https://registry.npmjs.org/node 145ms (cache revalidated)
+14 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+15 verbose shrinkwrap failed to load node_modules/.package-lock.json missing from lockfile: node_modules/node/node_modules/node-bin-setup
+16 warn exec The following package was not found and will be installed: node@22.22.2
+17 silly idealTree buildDeps
+18 silly fetch manifest node@22.22.2
+19 silly packumentCache full:https://registry.npmjs.org/node cache-miss
+20 http cache https://registry.npmjs.org/node 9ms (cache hit)
+21 silly packumentCache full:https://registry.npmjs.org/node set size:1290572 disposed:false
+22 silly placeDep ROOT node@22.22.2 REPLACE for:  want: 22.22.2
+23 silly reify mark retired [
+23 silly reify   'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\node-bin-setup'
+23 silly reify ]
+24 silly reify mark retired [
+24 silly reify   'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\node-win-x64',
+24 silly reify   'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.bin\\node',
+24 silly reify   'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.bin\\node.cmd',
+24 silly reify   'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.bin\\node.ps1'
+24 silly reify ]
+25 silly reify moves {
+25 silly reify   'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\node-bin-setup': 'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.node-bin-setup-L5Wg0KrP',
+25 silly reify   'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\node-win-x64': 'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.node-win-x64-tJwpiQrK',
+25 silly reify   'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.bin\\node': 'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.bin\\.node-DZeGVR2J',
+25 silly reify   'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.bin\\node.cmd': 'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.bin\\.node.cmd-lDWRG16w',
+25 silly reify   'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.bin\\node.ps1': 'C:\\Users\\DeAnna\\Desktop\\AI-First\\workspace01\\RecipeSuggest\\.npm-cache\\_npx\\52027bd8fc0022aa\\node_modules\\node\\node_modules\\.bin\\.node.ps1-ebkybgUx'
+25 silly reify }
+26 silly audit bulk request { 'node-bin-setup': [ '1.1.4' ], node: [ '22.22.2' ] }
+27 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 69ms
+28 silly audit report {}
