@@ -1,0 +1,209 @@
+---
+import Base from "../layouts/Base.astro";
+import {
+  Show,
+  SignInButton,
+  SignOutButton,
+  SignUpButton,
+  UserButton,
+} from "@clerk/astro/components";
+---
+
+<Base title="Saved Bookmarks — RecipeSuggest">
+  <div class="container" x-data="bookmarksPage">
+    <header class="site-header">
+      <div class="site-header__nav">
+        <a href="/" class="site-header__logo">
+          <span class="site-header__logo-icon">🍳</span>
+          RecipeSuggest
+        </a>
+        <nav class="site-nav">
+          <a href="/" class="site-nav__link">Suggest</a>
+          <a href="/bookmarks" class="site-nav__link site-nav__link--active">Bookmarks</a>
+        </nav>
+        <div class="auth-actions">
+          <Show when="signed-out">
+            <SignInButton mode="modal" asChild>
+              <button type="button" class="auth-link">Sign in</button>
+            </SignInButton>
+            <SignUpButton mode="modal" asChild>
+              <button type="button" class="auth-link auth-link--primary">Sign up</button>
+            </SignUpButton>
+            <SignInButton mode="modal" asChild>
+              <button type="button" class="auth-link auth-link--subtle">Forgot password?</button>
+            </SignInButton>
+          </Show>
+          <Show when="signed-in">
+            <UserButton />
+            <SignOutButton asChild>
+              <button type="button" class="auth-link auth-link--subtle">Sign out</button>
+            </SignOutButton>
+          </Show>
+        </div>
+      </div>
+      <p class="site-header__tagline">All your saved recipes, ready to revisit.</p>
+    </header>
+
+    <section class="bookmarks-page">
+      <div class="bookmarks-page__header">
+        <div>
+          <p class="bookmarks-page__eyebrow">Saved recipes</p>
+          <h1 class="bookmarks-page__title">Bookmarks</h1>
+        </div>
+        <button
+          class="btn btn--ghost"
+          type="button"
+          x-show="bookmarks.length > 0"
+          @click="clearAll()"
+        >
+          Clear all
+        </button>
+      </div>
+
+      <div class="bookmarks-page__status" x-show="statusMessage" x-text="statusMessage"></div>
+
+      <div class="bookmarks-page__grid" x-show="bookmarks.length > 0">
+        <template x-for="recipe in bookmarks" :key="recipe.id">
+          <article class="bookmark-card">
+            <div class="bookmark-card__media">
+              <img
+                x-show="recipe.imageUrl"
+                :src="recipe.imageUrl"
+                :alt="recipe.title"
+                class="bookmark-card__image"
+              />
+              <div class="bookmark-card__placeholder" x-show="!recipe.imageUrl && !recipe.isGeneratingImage">
+                Image will appear here
+              </div>
+              <div class="bookmark-card__placeholder bookmark-card__placeholder--loading" x-show="recipe.isGeneratingImage">
+                Generating image…
+              </div>
+            </div>
+
+            <div class="bookmark-card__body">
+              <div class="bookmark-card__header">
+                <div>
+                  <h2 class="bookmark-card__title" x-text="recipe.title"></h2>
+                  <p class="bookmark-card__description" x-text="recipe.description"></p>
+                </div>
+                <button
+                  class="bookmark-card__remove"
+                  type="button"
+                  @click="removeBookmark(recipe.id)"
+                  aria-label="Remove bookmark"
+                >
+                  Remove
+                </button>
+              </div>
+
+              <div class="recipe-card__meta">
+                <span class="recipe-card__time" x-text="'⏱ ' + recipe.cookTime"></span>
+                <span
+                  class="badge"
+                  :class="{
+                    'badge--easy': recipe.difficulty === 'easy',
+                    'badge--medium': recipe.difficulty === 'medium',
+                    'badge--hard': recipe.difficulty === 'hard'
+                  }"
+                  x-text="recipe.difficulty"
+                ></span>
+              </div>
+
+              <div class="bookmark-card__section">
+                <h3 class="bookmark-card__section-title">Ingredients</h3>
+                <div class="bookmark-card__chips">
+                  <template x-for="ingredient in recipe.ingredients" :key="ingredient">
+                    <span class="modal__ingredient" x-text="ingredient"></span>
+                  </template>
+                </div>
+              </div>
+
+              <div class="bookmark-card__section">
+                <h3 class="bookmark-card__section-title">Instructions</h3>
+                <ol class="bookmark-card__steps">
+                  <template x-for="step in recipe.instructions" :key="step">
+                    <li x-text="step"></li>
+                  </template>
+                </ol>
+              </div>
+            </div>
+          </article>
+        </template>
+      </div>
+
+      <div class="empty-state" x-show="bookmarks.length === 0">
+        <div class="empty-state__icon">🔖</div>
+        <p class="empty-state__text">
+          Save recipes from the main page, then come back here to see them all in one place.
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    document.addEventListener('alpine:init', () => {
+      Alpine.data('bookmarksPage', () => ({
+        bookmarks: [],
+        statusMessage: '',
+
+        persist() {
+          const cleanBookmarks = this.bookmarks.map(({ isGeneratingImage, ...recipe }) => recipe);
+          localStorage.setItem('recipesuggest_bookmarks', JSON.stringify(cleanBookmarks));
+        },
+
+        removeBookmark(id) {
+          this.bookmarks = this.bookmarks.filter(recipe => recipe.id !== id);
+          this.persist();
+        },
+
+        clearAll() {
+          this.bookmarks = [];
+          localStorage.removeItem('recipesuggest_bookmarks');
+          this.statusMessage = '';
+        },
+
+        async populateMissingImages() {
+          const missingImages = this.bookmarks.filter(recipe => !recipe.imageUrl);
+          if (missingImages.length === 0) return;
+
+          this.statusMessage = 'Generating bookmark images…';
+
+          for (const recipe of missingImages) {
+            recipe.isGeneratingImage = true;
+
+            try {
+              const response = await fetch('/api/bookmark-image', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(recipe),
+              });
+
+              const data = await response.json();
+              if (!response.ok) {
+                throw new Error(data.error || 'Failed to generate image.');
+              }
+
+              recipe.imageUrl = data.imageUrl;
+              this.persist();
+            } catch (error) {
+              console.error(error);
+            } finally {
+              recipe.isGeneratingImage = false;
+            }
+          }
+
+          this.statusMessage = '';
+        },
+
+        init() {
+          this.bookmarks = JSON.parse(localStorage.getItem('recipesuggest_bookmarks') || '[]')
+            .map(recipe => ({ ...recipe, isGeneratingImage: false }));
+
+          this.populateMissingImages();
+        },
+      }));
+    });
+  </script>
+</Base>
