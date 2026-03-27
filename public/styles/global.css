@@ -975,6 +975,13 @@ body::before {
   margin-bottom: var(--space-lg);
 }
 
+.bookmarks-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
 .bookmarks-page__eyebrow,
 .bookmark-card__section-title {
   font-size: 0.78rem;
@@ -1203,10 +1210,126 @@ body::before {
 }
 
 /* ── Cook mode ────────────────────────────────── */
-.modal__cook-actions {
+.modal__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
   margin-top: var(--space-lg);
   padding-top: var(--space-md);
   border-top: 1px solid var(--border);
+}
+
+.modal__copy-status {
+  font-size: 0.88rem;
+  color: var(--green);
+  margin-top: var(--space-sm);
+  min-height: 1.25rem;
+}
+
+.modal__media {
+  margin: var(--space-md) 0 var(--space-lg);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.modal__photo {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+}
+
+.cook-mode__timer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.cook-timer__label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.cook-timer__input {
+  width: 4rem;
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.cook-timer__display {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.cook-timer__done {
+  width: 100%;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--green);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #111;
+  }
+
+  .modal-backdrop {
+    position: static !important;
+    padding: 0 !important;
+    background: transparent !important;
+    display: block !important;
+  }
+
+  .modal {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    background: #fff;
+    color: #111;
+  }
+
+  .modal__title,
+  .modal__desc {
+    color: #111;
+  }
+
+  .modal__ingredient {
+    background: #f5f5f5;
+    color: #111;
+    border-color: #ccc;
+  }
+
+  .modal__step-text {
+    color: #111;
+  }
+
+  .bookmark-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border-color: #ccc;
+  }
 }
 
 .cook-mode {

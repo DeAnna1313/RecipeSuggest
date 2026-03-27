@@ -13,7 +13,7 @@ import {
   <div class="container" x-data="recipeApp" @keydown.escape.window="handleEscape()">
 
     <!-- ─── Header ─────────────────────────────── -->
-    <header class="site-header">
+    <header class="site-header no-print">
       <div class="site-header__nav">
         <a href="/" class="site-header__logo">
           <span class="site-header__logo-icon">🍳</span>
@@ -48,7 +48,7 @@ import {
     </header>
 
     <!-- ─── Ingredient Input Panel ─────────────── -->
-    <section class="ingredient-panel">
+    <section class="ingredient-panel no-print">
       <label class="ingredient-panel__label" for="ingredient-input">
         What's in your kitchen?
       </label>
@@ -181,7 +181,7 @@ import {
 
     <!-- ─── Bookmarks Section ──────────────────── -->
     <section
-      class="bookmarks-section"
+      class="bookmarks-section no-print"
       x-data="{ showBookmarks: false }"
       x-show="$store.bookmarks.list.length > 0"
     >
@@ -233,7 +233,7 @@ import {
     </section>
 
     <!-- ─── Results Area ───────────────────────── -->
-    <section class="recipes-section">
+    <section class="recipes-section no-print">
       <div id="recipe-results">
         <div class="empty-state">
           <div class="empty-state__icon">🥘</div>
@@ -252,7 +252,7 @@ import {
       style="display: none;"
     >
       <div class="modal" @click.stop>
-        <button class="modal__close" @click="modalOpen = false" aria-label="Close modal">×</button>
+        <button class="modal__close no-print" @click="modalOpen = false" aria-label="Close modal">×</button>
 
         <h2 class="modal__title" x-text="activeRecipe.title"></h2>
         <p class="modal__desc" x-text="activeRecipe.description"></p>
@@ -275,6 +275,10 @@ import {
           </div>
         </div>
 
+        <div class="modal__media no-print" x-show="activeRecipe.imageUrl">
+          <img :src="activeRecipe.imageUrl" :alt="activeRecipe.title" class="modal__photo" />
+        </div>
+
         <h3 class="modal__section-title">Ingredients</h3>
         <div class="modal__ingredients">
           <template x-for="ing in activeRecipe.ingredients" :key="ing">
@@ -291,14 +295,29 @@ import {
           </template>
         </ol>
 
-        <div class="modal__cook-actions">
+        <p class="modal__copy-status no-print" x-show="copyStatus" x-text="copyStatus"></p>
+
+        <div class="modal__toolbar no-print">
+          <button type="button" class="btn btn--ghost" @click="window.print()">Print</button>
+          <button type="button" class="btn btn--ghost" @click="copyIngredientList()">Copy ingredients</button>
+          <button type="button" class="btn btn--ghost" @click="copyShopList()" title="Lines that may not match your kitchen list (heuristic)">Copy shop hints</button>
+          <button
+            type="button"
+            class="btn btn--ghost"
+            x-show="!activeRecipe.imageUrl"
+            :disabled="previewImageLoading"
+            @click="loadPreviewImage()"
+          >
+            <span x-show="!previewImageLoading">AI dish photo</span>
+            <span x-show="previewImageLoading">Loading…</span>
+          </button>
           <button type="button" class="btn btn--primary" @click="openCookMode()">Cook mode</button>
         </div>
       </div>
     </div>
 
     <div
-      class="cook-mode"
+      class="cook-mode no-print"
       x-show="cookModeOpen"
       x-transition:enter="fadeIn"
       style="display: none;"
@@ -308,7 +327,7 @@ import {
     >
       <div class="cook-mode__inner">
         <header class="cook-mode__header">
-          <button type="button" class="cook-mode__close" @click="cookModeOpen = false" aria-label="Exit cook mode">×</button>
+          <button type="button" class="cook-mode__close" @click="closeCookMode()" aria-label="Exit cook mode">×</button>
           <p class="cook-mode__title" x-text="activeRecipe.title"></p>
           <p class="cook-mode__progress">
             Step <span x-text="cookStepIndex + 1"></span>
@@ -320,6 +339,18 @@ import {
           <p class="cook-mode__step" x-show="activeRecipe.instructions && activeRecipe.instructions.length" x-text="activeRecipe.instructions[cookStepIndex]"></p>
           <p class="cook-mode__empty" x-show="!activeRecipe.instructions || activeRecipe.instructions.length === 0">No steps for this recipe.</p>
         </div>
+
+        <div class="cook-mode__timer no-print">
+          <label class="cook-timer__label">
+            Timer (minutes)
+            <input type="number" class="cook-timer__input" x-model="cookTimerMins" min="1" max="120" />
+          </label>
+          <button type="button" class="btn btn--ghost" @click="startCookTimer()" :disabled="cookTimerRemaining !== null">Start</button>
+          <button type="button" class="btn btn--ghost" @click="stopCookTimer()" x-show="cookTimerRemaining !== null">Stop</button>
+          <span class="cook-timer__display" x-show="cookTimerRemaining !== null" x-text="formatCookCountdown(cookTimerRemaining)"></span>
+          <p class="cook-timer__done" x-show="cookTimerDone">Time is up!</p>
+        </div>
+
         <footer class="cook-mode__footer">
           <button type="button" class="btn btn--ghost" @click="prevCookStep()" :disabled="cookStepIndex === 0">Previous</button>
           <button
@@ -332,7 +363,7 @@ import {
             type="button"
             class="btn btn--primary"
             x-show="activeRecipe.instructions && activeRecipe.instructions.length > 0 && cookStepIndex >= activeRecipe.instructions.length - 1"
-            @click="cookModeOpen = false"
+            @click="closeCookMode()"
           >Done</button>
         </footer>
       </div>
@@ -422,6 +453,13 @@ import {
         cNutFree: false,
         cMaxMins: '',
         cNotes: '',
+        copyStatus: '',
+        _copyStatusTimer: null,
+        previewImageLoading: false,
+        cookTimerMins: 5,
+        cookTimerRemaining: null,
+        cookTimerDone: false,
+        _cookTimerId: null,
         activeRecipe: {
           title: '',
           description: '',
@@ -429,6 +467,7 @@ import {
           difficulty: 'easy',
           ingredients: [],
           instructions: [],
+          imageUrl: undefined,
         },
 
         addIngredient() {
@@ -507,17 +546,149 @@ import {
           this.modalOpen = true;
           this.cookModeOpen = false;
           this.cookStepIndex = 0;
+          this.copyStatus = '';
+          this.stopCookTimer();
+          this.cookTimerDone = false;
+        },
+
+        showCopyStatus(msg) {
+          this.copyStatus = msg;
+          if (this._copyStatusTimer) clearTimeout(this._copyStatusTimer);
+          this._copyStatusTimer = setTimeout(() => {
+            this.copyStatus = '';
+          }, 2200);
+        },
+
+        async copyIngredientList() {
+          const lines = this.activeRecipe.ingredients || [];
+          if (!lines.length) return;
+          try {
+            await navigator.clipboard.writeText(lines.join('\n'));
+            this.showCopyStatus('Ingredients copied to clipboard');
+          } catch {
+            this.showCopyStatus('Could not copy');
+          }
+        },
+
+        linesYouMayNeedToBuy() {
+          const pantry = (this.ingredients || [])
+            .map((i) => String(i).toLowerCase().trim())
+            .filter((p) => p.length >= 2);
+          const rows = this.activeRecipe.ingredients || [];
+          const out = [];
+          for (const line of rows) {
+            const l = String(line).toLowerCase();
+            const hit = pantry.some((p) => l.includes(p));
+            if (!hit) out.push(line);
+          }
+          return out.length ? out : [...rows];
+        },
+
+        async copyShopList() {
+          const lines = this.linesYouMayNeedToBuy();
+          if (!lines.length) return;
+          try {
+            await navigator.clipboard.writeText(lines.join('\n'));
+            this.showCopyStatus('Shopping hints copied');
+          } catch {
+            this.showCopyStatus('Could not copy');
+          }
+        },
+
+        async loadPreviewImage() {
+          if (this.previewImageLoading || this.activeRecipe.imageUrl) return;
+          this.previewImageLoading = true;
+          try {
+            const res = await fetch('/api/bookmark-image', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.activeRecipe),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              throw new Error(data.error || 'Image request failed');
+            }
+            this.activeRecipe = {
+              ...this.activeRecipe,
+              imageUrl: data.imageUrl,
+            };
+            this.showCopyStatus('Photo added');
+          } catch (e) {
+            this.showCopyStatus(
+              e instanceof Error ? e.message : 'Photo failed',
+            );
+          } finally {
+            this.previewImageLoading = false;
+          }
         },
 
         handleEscape() {
           if (this.cookModeOpen) {
-            this.cookModeOpen = false;
+            this.closeCookMode();
             return;
           }
           this.modalOpen = false;
         },
 
+        formatCookCountdown(sec) {
+          if (sec == null || sec < 0) return '';
+          const m = Math.floor(sec / 60);
+          const s = sec % 60;
+          return m + ':' + String(s).padStart(2, '0');
+        },
+
+        startCookTimer() {
+          this.stopCookTimer();
+          this.cookTimerDone = false;
+          let mins = parseInt(String(this.cookTimerMins), 10);
+          if (!Number.isFinite(mins) || mins < 1) mins = 5;
+          if (mins > 120) mins = 120;
+          this.cookTimerRemaining = mins * 60;
+          this._cookTimerId = setInterval(() => {
+            this.cookTimerRemaining--;
+            if (this.cookTimerRemaining <= 0) {
+              this.stopCookTimer(true);
+            }
+          }, 1000);
+        },
+
+        stopCookTimer(ding) {
+          if (this._cookTimerId) {
+            clearInterval(this._cookTimerId);
+            this._cookTimerId = null;
+          }
+          this.cookTimerRemaining = null;
+          if (ding) {
+            this.cookTimerDone = true;
+            try {
+              const AC = window.AudioContext || window.webkitAudioContext;
+              if (AC) {
+                const ctx = new AC();
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.connect(g);
+                g.connect(ctx.destination);
+                o.frequency.value = 880;
+                g.gain.value = 0.07;
+                o.start();
+                setTimeout(() => {
+                  o.stop();
+                  ctx.close();
+                }, 220);
+              }
+            } catch (_e) {}
+          }
+        },
+
+        closeCookMode() {
+          this.stopCookTimer();
+          this.cookModeOpen = false;
+        },
+
         openCookMode() {
+          this.stopCookTimer();
+          this.cookTimerDone = false;
           this.cookStepIndex = 0;
           this.cookModeOpen = true;
         },
@@ -554,6 +725,21 @@ import {
           });
         }
       }));
+    });
+  </script>
+  <script is:inline>
+    document.addEventListener("DOMContentLoaded", function () {
+      document.body.addEventListener("htmx:beforeSwap", function (evt) {
+        var xhr = evt.detail.xhr;
+        if (
+          xhr &&
+          xhr.status >= 400 &&
+          xhr.responseURL &&
+          xhr.responseURL.indexOf("/api/suggest") !== -1
+        ) {
+          evt.detail.shouldSwap = true;
+        }
+      });
     });
   </script>
 </Base>

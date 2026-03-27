@@ -4,6 +4,10 @@ import {
   type Recipe,
   type SuggestConstraints,
 } from "../../lib/recipes";
+import {
+  checkRateLimit,
+  clientKeyFromRequest,
+} from "../../lib/rate-limit";
 
 function parseConstraints(raw: string | undefined): SuggestConstraints {
   if (!raw?.trim()) return {};
@@ -35,6 +39,22 @@ try {
   if (ingredients.length === 0) {
     error = "Please add at least one ingredient.";
   } else {
+    const auth = await Astro.locals.auth();
+    const uid = auth.userId ?? null;
+    const rl = checkRateLimit(
+      clientKeyFromRequest(Astro.request, uid),
+      { maxAnon: 24, maxAuth: 96, windowMs: 15 * 60 * 1000 },
+      !!uid,
+    );
+    if (!rl.allowed) {
+      return new Response(
+        `<div class="error-message">Too many recipe requests. Please wait ${rl.retryAfterSeconds} seconds and try again.</div>`,
+        {
+          status: 429,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        },
+      );
+    }
     const constraints = parseConstraints(
       formData.get("constraints")?.toString(),
     );
