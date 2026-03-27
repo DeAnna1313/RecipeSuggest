@@ -346,9 +346,9 @@ import {
           </div>
         </div>
 
-        <div class="modal__media no-print" x-show="activeRecipe.imageUrl || previewImageLoading">
+        <div class="modal__media" x-show="activeRecipe.imageUrl || previewImageLoading">
           <img :src="activeRecipe.imageUrl" :alt="activeRecipe.title" class="modal__photo" />
-          <div class="recipe-card__placeholder recipe-card__placeholder--loading" x-show="previewImageLoading && !activeRecipe.imageUrl">
+          <div class="recipe-card__placeholder recipe-card__placeholder--loading no-print" x-show="previewImageLoading && !activeRecipe.imageUrl">
             Generating finished dish photo...
           </div>
         </div>
@@ -1046,8 +1046,28 @@ import {
           }
         },
 
+        async ensureActiveRecipeImage() {
+          if (this.activeRecipe.imageUrl) return this.activeRecipe.imageUrl;
+          try {
+            const imageUrl = await window.ensureRecipeImage(this.activeRecipe);
+            this.activeRecipe = {
+              ...this.activeRecipe,
+              imageUrl,
+            };
+            return imageUrl;
+          } catch {
+            return '';
+          }
+        },
+
+        async printActiveRecipe() {
+          await this.ensureActiveRecipeImage();
+          window.print();
+        },
+
         async downloadActiveRecipeHtml() {
           try {
+            const imageUrl = await this.ensureActiveRecipeImage();
             const res = await fetch('/api/export-recipe-html', {
               method: 'POST',
               credentials: 'same-origin',
@@ -1055,6 +1075,7 @@ import {
               body: JSON.stringify({
                 recipe: {
                   ...this.activeRecipe,
+                  imageUrl: imageUrl || this.activeRecipe.imageUrl,
                   ingredients: this.scaledIngredientLines(),
                   servings: Number(this.modalTargetServings) || this.recipeBaseServings(),
                 },
@@ -1119,14 +1140,14 @@ import {
           this.modalOpen = false;
         },
 
-        runModalAction(action) {
+        async runModalAction(action) {
           this.modalMenuOpen = false;
           switch (action) {
             case 'print':
-              window.print();
+              await this.printActiveRecipe();
               return;
             case 'download':
-              this.downloadActiveRecipeHtml();
+              await this.downloadActiveRecipeHtml();
               return;
             case 'ingredients':
               this.copyIngredientList();
@@ -1138,7 +1159,7 @@ import {
               this.copyMergedShopList();
               return;
             case 'photo':
-              this.loadPreviewImage();
+              await this.loadPreviewImage();
               return;
             case 'cook':
               this.openCookMode();

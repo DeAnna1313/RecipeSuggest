@@ -1516,10 +1516,27 @@ html[data-theme="light"] body::before {
     color: #111;
   }
 
+  .modal__media,
+  .modal__meta,
+  .modal__ingredients,
+  .modal__step {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .modal__section-title {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
   .modal__ingredient {
     background: #f5f5f5;
     color: #111;
     border-color: #ccc;
+  }
+
+  .modal__photo {
+    max-height: none;
   }
 
   .modal__step-text {
