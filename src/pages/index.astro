@@ -98,6 +98,8 @@ import {
             class="btn btn--primary"
             type="submit"
             :disabled="ingredients.length === 0 || loading"
+            :aria-busy="loading"
+            :aria-label="loading ? 'Searching for recipes, please wait' : 'Suggest recipes from your ingredients'"
             x-text="loading ? 'Finding recipes…' : '✨ Suggest Recipes'"
           ></button>
         </form>
