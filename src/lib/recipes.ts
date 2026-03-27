@@ -11,6 +11,16 @@ export interface Recipe {
   imageUrl?: string;
 }
 
+export interface SuggestConstraints {
+  vegetarian?: boolean;
+  vegan?: boolean;
+  glutenFree?: boolean;
+  dairyFree?: boolean;
+  nutFree?: boolean;
+  maxTimeMins?: number;
+  notes?: string;
+}
+
 /* ── In-memory response cache ────────────────── */
 const cache = new Map<string, Recipe[]>();
 
@@ -25,16 +35,79 @@ function getOpenAIClient() {
   return new OpenAI({ apiKey });
 }
 
-function cacheKey(ingredients: string[]): string {
-  return [...ingredients]
-    .sort()
+function normalizeConstraints(
+  c: SuggestConstraints | undefined,
+): SuggestConstraints {
+  if (!c || typeof c !== "object") return {};
+  const max = Number(c.maxTimeMins);
+  return {
+    vegetarian: !!c.vegetarian,
+    vegan: !!c.vegan,
+    glutenFree: !!c.glutenFree,
+    dairyFree: !!c.dairyFree,
+    nutFree: !!c.nutFree,
+    maxTimeMins: Number.isFinite(max) && max > 0 ? Math.round(max) : undefined,
+    notes:
+      typeof c.notes === "string" && c.notes.trim() ? c.notes.trim() : undefined,
+  };
+}
+
+function cacheKey(
+  ingredients: string[],
+  constraints: SuggestConstraints,
+): string {
+  const ing = [...ingredients]
     .map((i) => i.trim().toLowerCase())
-    .join("|");
+    .filter(Boolean)
+    .sort();
+  return JSON.stringify({ ing, c: constraints });
+}
+
+function constraintsPromptBlock(c: SuggestConstraints): string {
+  const lines: string[] = [];
+  if (c.vegan) {
+    lines.push(
+      "All recipes must be fully vegan (no meat, fish, dairy, eggs, or honey).",
+    );
+  } else if (c.vegetarian) {
+    lines.push(
+      "All recipes must be vegetarian (no meat, fish, or poultry; dairy and eggs are allowed unless otherwise constrained).",
+    );
+  }
+  if (c.glutenFree) {
+    lines.push(
+      "Avoid gluten: no wheat, barley, rye, or unsafe oats; use labeled gluten-free substitutes when needed.",
+    );
+  }
+  if (c.dairyFree) {
+    lines.push(
+      "No dairy (no milk, butter, cheese, cream, yogurt); use plant-based substitutes where helpful.",
+    );
+  }
+  if (c.nutFree) {
+    lines.push(
+      "No peanuts or tree nuts; avoid nut oils and cross-contact ingredients.",
+    );
+  }
+  if (c.maxTimeMins) {
+    lines.push(
+      `Each recipe must be realistic to finish within about ${c.maxTimeMins} minutes total (prep + cook), given the constraints.`,
+    );
+  }
+  if (c.notes) {
+    lines.push(`Additional user preferences: ${c.notes}`);
+  }
+  if (lines.length === 0) return "";
+  return `\n\nStrict requirements (you must follow all):\n- ${lines.join("\n- ")}`;
 }
 
 /* ── Main function ───────────────────────────── */
-export async function suggestRecipes(ingredients: string[]): Promise<Recipe[]> {
-  const key = cacheKey(ingredients);
+export async function suggestRecipes(
+  ingredients: string[],
+  constraints: SuggestConstraints = {},
+): Promise<Recipe[]> {
+  const c = normalizeConstraints(constraints);
+  const key = cacheKey(ingredients, c);
 
   if (cache.has(key)) {
     return cache.get(key)!;
@@ -42,7 +115,19 @@ export async function suggestRecipes(ingredients: string[]): Promise<Recipe[]> {
 
   const client = getOpenAIClient();
 
-  const systemPrompt = `You are a helpful cooking assistant. The user will give you a list of ingredients they have on hand. Suggest exactly 4 recipes they can make. Each recipe should primarily use the listed ingredients, but you may include a few common pantry staples (salt, pepper, oil, water, basic spices, etc.) without listing them separately.
+  const systemPrompt = `You are a careful cooking coach for beginners (including teenagers with little kitchen experience). The user lists ingredients they already have. Suggest exactly 4 recipes that work well with those ingredients.
+
+Rules for ingredients (IMPORTANT):
+- The "ingredients" array must list EVERYTHING used in the dish, including common pantry items if they appear in the recipe: e.g. butter, salt, black pepper, olive oil or vegetable oil, water, sugar, flour, garlic, lemon juice, basic spices, etc. Use clear amounts where helpful (e.g. "2 tbsp butter", "salt and black pepper to taste").
+- Do not hide staples—someone should read the list and know what to gather before cooking, even if they already have it at home.
+
+Rules for instructions (IMPORTANT):
+- Use 6–14 steps per recipe. One main action per step, in strict order.
+- Be explicit: say approximate heat (e.g. medium heat), times, when to stir, what "done" looks like (color/texture), and simple safety (hot pan, oven mitts for oven).
+- Define terms briefly when needed (e.g. "dice = small cubes").
+- Assume no prior knowledge but keep language friendly, not condescending.
+
+If the user gave dietary or time constraints in their message, every recipe must satisfy them. If it is impossible with only their listed ingredients, prefer recipes that are close and note any minimal extra need in the description (still obey JSON schema).
 
 Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON must be an array of exactly 4 objects with this schema:
 
@@ -52,11 +137,11 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
   "description": "A short 1-2 sentence description of the dish.",
   "cookTime": "e.g. 25 mins",
   "difficulty": "easy" | "medium" | "hard",
-  "ingredients": ["ingredient 1", "ingredient 2"],
-  "instructions": ["Step 1 text", "Step 2 text"]
+  "ingredients": ["each item with amount if sensible"],
+  "instructions": ["Step 1 — ...", "Step 2 — ..."]
 }`;
 
-  const userPrompt = `I have these ingredients: ${ingredients.join(", ")}`;
+  const userPrompt = `I have these ingredients: ${ingredients.join(", ")}${constraintsPromptBlock(c)}`;
 
   const response = await client.chat.completions.create({
     model: "gpt-4o-mini",
@@ -65,7 +150,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
       { role: "user", content: userPrompt },
     ],
     temperature: 0.7,
-    max_tokens: 3000,
+    max_tokens: 5000,
   });
 
   const raw = response.choices[0]?.message?.content?.trim() ?? "[]";
@@ -94,19 +179,17 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
 export async function generateRecipeImage(recipe: Recipe): Promise<string> {
   const client = getOpenAIClient();
   const prompt = [
-    "Create a realistic editorial food photo for this recipe.",
-    `Recipe title: ${recipe.title}.`,
-    `Description: ${recipe.description}`,
-    `Key ingredients: ${recipe.ingredients.join(", ")}.`,
-    "Show the plated finished dish only.",
-    "Warm natural lighting, appetizing styling, no text, no watermark, no labels.",
+    "Simple realistic photo of the finished plated dish only.",
+    recipe.title + ".",
+    recipe.description.slice(0, 200),
+    "Natural light, no text or watermark.",
   ].join(" ");
 
   const response = await client.images.generate({
     model: "gpt-image-1",
     prompt,
     size: "1024x1024",
-    quality: "medium",
+    quality: "low",
   });
 
   const imageBase64 = response.data?.[0]?.b64_json;

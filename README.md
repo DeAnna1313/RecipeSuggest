@@ -20,7 +20,7 @@ npm install
 npm run dev
 ```
 
-The app starts at `http://localhost:4321`.
+The app starts at `http://localhost:4322`.
 
 ## Build
 

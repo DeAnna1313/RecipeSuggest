@@ -10,7 +10,7 @@ import {
 ---
 
 <Base>
-  <div class="container" x-data="recipeApp">
+  <div class="container" x-data="recipeApp" @keydown.escape.window="handleEscape()">
 
     <!-- ─── Header ─────────────────────────────── -->
     <header class="site-header">
@@ -79,6 +79,52 @@ import {
         </template>
       </div>
 
+      <div class="constraint-panel" x-show="ingredients.length > 0">
+        <p class="constraint-panel__title">Preferences (optional)</p>
+        <div class="constraint-grid">
+          <label class="constraint-check">
+            <input type="checkbox" x-model="cVegan" @change="cVegan && (cVegetarian = true)" />
+            Vegan
+          </label>
+          <label class="constraint-check">
+            <input type="checkbox" x-model="cVegetarian" :disabled="cVegan" />
+            Vegetarian
+          </label>
+          <label class="constraint-check">
+            <input type="checkbox" x-model="cGlutenFree" />
+            Gluten-free
+          </label>
+          <label class="constraint-check">
+            <input type="checkbox" x-model="cDairyFree" />
+            Dairy-free
+          </label>
+          <label class="constraint-check">
+            <input type="checkbox" x-model="cNutFree" />
+            Nut-free
+          </label>
+        </div>
+        <label class="constraint-mins">
+          Max time (minutes)
+          <input
+            type="number"
+            class="constraint-mins__input"
+            x-model="cMaxMins"
+            min="5"
+            max="300"
+            placeholder="e.g. 45"
+          />
+        </label>
+        <label class="constraint-notes">
+          Extra notes
+          <textarea
+            class="constraint-notes__input"
+            x-model="cNotes"
+            rows="2"
+            placeholder="e.g. no cilantro, mild spice only…"
+          />
+        </label>
+      </div>
+
       <!-- Actions -->
       <div class="ingredient-panel__actions">
         <span class="ingredient-panel__count" x-show="ingredients.length > 0">
@@ -94,10 +140,13 @@ import {
           @htmx:before-request="onBeforeRequest($event)"
         >
           <input type="hidden" name="ingredients" :value="ingredients.join(',')" />
+          <input type="hidden" name="constraints" :value="constraintsPayload()" />
           <button
             class="btn btn--primary"
             type="submit"
             :disabled="ingredients.length === 0 || loading"
+            :aria-busy="loading"
+            :aria-label="loading ? 'Searching for recipes, please wait' : 'Suggest recipes from your ingredients'"
             x-text="loading ? 'Finding recipes…' : '✨ Suggest Recipes'"
           ></button>
         </form>
@@ -199,7 +248,6 @@ import {
       x-show="modalOpen"
       x-transition:enter="fadeIn"
       @click.self="modalOpen = false"
-      @keydown.escape.window="modalOpen = false"
       @open-recipe.window="openModal($event.detail)"
       style="display: none;"
     >
@@ -242,6 +290,51 @@ import {
             </li>
           </template>
         </ol>
+
+        <div class="modal__cook-actions">
+          <button type="button" class="btn btn--primary" @click="openCookMode()">Cook mode</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="cook-mode"
+      x-show="cookModeOpen"
+      x-transition:enter="fadeIn"
+      style="display: none;"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="'Cook mode: ' + (activeRecipe.title || 'recipe')"
+    >
+      <div class="cook-mode__inner">
+        <header class="cook-mode__header">
+          <button type="button" class="cook-mode__close" @click="cookModeOpen = false" aria-label="Exit cook mode">×</button>
+          <p class="cook-mode__title" x-text="activeRecipe.title"></p>
+          <p class="cook-mode__progress">
+            Step <span x-text="cookStepIndex + 1"></span>
+            of
+            <span x-text="(activeRecipe.instructions && activeRecipe.instructions.length) ? activeRecipe.instructions.length : 1"></span>
+          </p>
+        </header>
+        <div class="cook-mode__body">
+          <p class="cook-mode__step" x-show="activeRecipe.instructions && activeRecipe.instructions.length" x-text="activeRecipe.instructions[cookStepIndex]"></p>
+          <p class="cook-mode__empty" x-show="!activeRecipe.instructions || activeRecipe.instructions.length === 0">No steps for this recipe.</p>
+        </div>
+        <footer class="cook-mode__footer">
+          <button type="button" class="btn btn--ghost" @click="prevCookStep()" :disabled="cookStepIndex === 0">Previous</button>
+          <button
+            type="button"
+            class="btn btn--primary"
+            x-show="activeRecipe.instructions && activeRecipe.instructions.length > 0 && cookStepIndex < activeRecipe.instructions.length - 1"
+            @click="nextCookStep()"
+          >Next</button>
+          <button
+            type="button"
+            class="btn btn--primary"
+            x-show="activeRecipe.instructions && activeRecipe.instructions.length > 0 && cookStepIndex >= activeRecipe.instructions.length - 1"
+            @click="cookModeOpen = false"
+          >Done</button>
+        </footer>
       </div>
     </div>
 
@@ -270,6 +363,9 @@ import {
       // Sync Alpine bookmark store if available
       if (window.Alpine) {
         Alpine.store('bookmarks').list = bookmarks;
+      }
+      if (typeof window.queueBookmarkSync === "function") {
+        window.queueBookmarkSync();
       }
     };
 
@@ -303,6 +399,9 @@ import {
             this.list = [...this.list, recipe];
           }
           localStorage.setItem('recipesuggest_bookmarks', JSON.stringify(this.list));
+          if (typeof window.queueBookmarkSync === "function") {
+            window.queueBookmarkSync();
+          }
         }
       });
     });
@@ -314,6 +413,15 @@ import {
         history: [],
         loading: false,
         modalOpen: false,
+        cookModeOpen: false,
+        cookStepIndex: 0,
+        cVegetarian: false,
+        cVegan: false,
+        cGlutenFree: false,
+        cDairyFree: false,
+        cNutFree: false,
+        cMaxMins: '',
+        cNotes: '',
         activeRecipe: {
           title: '',
           description: '',
@@ -397,6 +505,44 @@ import {
         openModal(recipe) {
           this.activeRecipe = recipe;
           this.modalOpen = true;
+          this.cookModeOpen = false;
+          this.cookStepIndex = 0;
+        },
+
+        handleEscape() {
+          if (this.cookModeOpen) {
+            this.cookModeOpen = false;
+            return;
+          }
+          this.modalOpen = false;
+        },
+
+        openCookMode() {
+          this.cookStepIndex = 0;
+          this.cookModeOpen = true;
+        },
+
+        nextCookStep() {
+          const n = this.activeRecipe.instructions?.length ?? 0;
+          if (this.cookStepIndex < n - 1) this.cookStepIndex++;
+        },
+
+        prevCookStep() {
+          if (this.cookStepIndex > 0) this.cookStepIndex--;
+        },
+
+        constraintsPayload() {
+          const max = parseInt(String(this.cMaxMins), 10);
+          return JSON.stringify({
+            vegetarian: !!this.cVegetarian || !!this.cVegan,
+            vegan: !!this.cVegan,
+            glutenFree: !!this.cGlutenFree,
+            dairyFree: !!this.cDairyFree,
+            nutFree: !!this.cNutFree,
+            maxTimeMins:
+              Number.isFinite(max) && max > 0 ? max : undefined,
+            notes: String(this.cNotes || '').trim() || undefined,
+          });
         },
 
         init() {

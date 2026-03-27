@@ -24,6 +24,27 @@ const { title = 'RecipeSuggest — AI Recipe Finder' } = Astro.props;
     <link rel="stylesheet" href="/styles/global.css" />
   </head>
   <body>
+    <script is:inline>
+      (function () {
+        var t;
+        window.queueBookmarkSync = function () {
+          clearTimeout(t);
+          t = setTimeout(async function () {
+            try {
+              var list = JSON.parse(
+                localStorage.getItem("recipesuggest_bookmarks") || "[]",
+              );
+              await fetch("/api/bookmarks-data", {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ recipes: list }),
+              });
+            } catch (_e) {}
+          }, 900);
+        };
+      })();
+    </script>
     <slot />
   </body>
 </html>
