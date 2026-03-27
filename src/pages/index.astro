@@ -148,6 +148,42 @@ import {
             <option value="metric">Metric (g, ml, L…)</option>
           </select>
         </label>
+        <div class="constraint-notes">
+          <span class="constraint-panel__title">Cooking hardware</span>
+          <div class="constraint-grid constraint-grid--appliances">
+            <label class="constraint-check">
+              <input type="checkbox" x-model="cApplianceMicrowave" @change="onApplianceToggle('microwave')" />
+              Microwave
+            </label>
+            <label class="constraint-check">
+              <input type="checkbox" x-model="cApplianceStove" @change="onApplianceToggle('stove')" />
+              Stove
+            </label>
+            <label class="constraint-check">
+              <input type="checkbox" x-model="cApplianceOven" @change="onApplianceToggle('oven')" />
+              Oven
+            </label>
+            <label class="constraint-check">
+              <input type="checkbox" x-model="cApplianceAirFryer" @change="onApplianceToggle('airFryer')" />
+              Air fryer
+            </label>
+            <label class="constraint-check">
+              <input type="checkbox" x-model="cApplianceNone" @change="onApplianceToggle('none')" />
+              None
+            </label>
+            <label class="constraint-check">
+              <input type="checkbox" x-model="cApplianceOther" @change="onApplianceToggle('other')" />
+              Other
+            </label>
+          </div>
+          <input
+            x-show="cApplianceOther"
+            type="text"
+            class="constraint-notes__input"
+            x-model="cApplianceOtherText"
+            placeholder="e.g. rice cooker, grill, hot plate"
+          />
+        </div>
         <label class="constraint-notes">
           Extra notes
           <textarea
@@ -594,6 +630,13 @@ import {
         cGlutenFree: false,
         cDairyFree: false,
         cNutFree: false,
+        cApplianceMicrowave: false,
+        cApplianceStove: false,
+        cApplianceOven: false,
+        cApplianceAirFryer: false,
+        cApplianceNone: false,
+        cApplianceOther: false,
+        cApplianceOtherText: '',
         cMaxMins: '',
         cServings: '4',
         cUnitSystem: '',
@@ -664,6 +707,38 @@ import {
 
         removeIngredient(idx) {
           this.ingredients.splice(idx, 1);
+        },
+
+        onApplianceToggle(kind) {
+          if (kind === 'none' && this.cApplianceNone) {
+            this.cApplianceMicrowave = false;
+            this.cApplianceStove = false;
+            this.cApplianceOven = false;
+            this.cApplianceAirFryer = false;
+            this.cApplianceOther = false;
+            this.cApplianceOtherText = '';
+            return;
+          }
+          if (kind !== 'none') {
+            this.cApplianceNone = false;
+          }
+          if (kind === 'other' && !this.cApplianceOther) {
+            this.cApplianceOtherText = '';
+          }
+        },
+
+        selectedAppliances() {
+          if (this.cApplianceNone) return ['none'];
+          const out = [];
+          if (this.cApplianceMicrowave) out.push('microwave');
+          if (this.cApplianceStove) out.push('stove');
+          if (this.cApplianceOven) out.push('oven');
+          if (this.cApplianceAirFryer) out.push('air fryer');
+          if (this.cApplianceOther) {
+            const other = String(this.cApplianceOtherText || '').trim();
+            if (other) out.push(other);
+          }
+          return out;
         },
 
         onBeforeRequest(evt) {
@@ -974,6 +1049,7 @@ import {
             glutenFree: !!this.cGlutenFree,
             dairyFree: !!this.cDairyFree,
             nutFree: !!this.cNutFree,
+            appliances: this.selectedAppliances(),
             maxTimeMins:
               Number.isFinite(max) && max > 0 ? max : undefined,
             servings:

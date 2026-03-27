@@ -27,6 +27,8 @@ export interface SuggestConstraints {
   servings?: number;
   /** Ingredient measurements in US customary vs metric. */
   unitSystem?: UnitSystem;
+  /** Cooking hardware the user has available. */
+  appliances?: string[];
 }
 
 /* ── In-memory response cache ────────────────── */
@@ -51,6 +53,13 @@ function normalizeConstraints(
   const serv = Number(c.servings);
   const unit =
     c.unitSystem === "metric" || c.unitSystem === "us" ? c.unitSystem : undefined;
+  const appliances = Array.isArray(c.appliances)
+    ? [...new Set(
+        c.appliances
+          .map((v) => String(v).trim().toLowerCase())
+          .filter(Boolean),
+      )]
+    : undefined;
   return {
     vegetarian: !!c.vegetarian,
     vegan: !!c.vegan,
@@ -63,6 +72,7 @@ function normalizeConstraints(
     servings:
       Number.isFinite(serv) && serv >= 1 && serv <= 24 ? Math.round(serv) : undefined,
     unitSystem: unit,
+    appliances: appliances?.length ? appliances : undefined,
   };
 }
 
@@ -110,6 +120,17 @@ function constraintsPromptBlock(c: SuggestConstraints): string {
   }
   if (c.notes) {
     lines.push(`Additional user preferences: ${c.notes}`);
+  }
+  if (c.appliances?.length) {
+    if (c.appliances.includes("none")) {
+      lines.push(
+        "The user has no cooking hardware available. Only suggest recipes that do not require stove, oven, microwave, air fryer, or other cooking equipment.",
+      );
+    } else {
+      lines.push(
+        `Only use these cooking hardware options: ${c.appliances.join(", ")}. Do not rely on equipment outside this list.`,
+      );
+    }
   }
   const servings = c.servings ?? 4;
   lines.push(
