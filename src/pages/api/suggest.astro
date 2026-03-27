@@ -25,6 +25,16 @@ if (Astro.request.method !== "POST") {
 let recipes: Recipe[] = [];
 let error = "";
 
+function parseStringArray(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return Array.isArray(v) ? v.map((x) => String(x)) : [];
+  } catch {
+    return [];
+  }
+}
+
 try {
   const formData = await Astro.request.formData();
   const ingredientsRaw = formData.get("ingredients")?.toString() ?? "";
@@ -57,7 +67,12 @@ try {
     const constraints = parseConstraints(
       formData.get("constraints")?.toString(),
     );
-    recipes = await suggestRecipes(ingredients, constraints);
+    const excludeRecipeIds = parseStringArray(
+      formData.get("excludeRecipeIds")?.toString(),
+    );
+    recipes = await suggestRecipes(ingredients, constraints, {
+      excludeRecipeIds,
+    });
   }
 } catch (e: unknown) {
   error =
@@ -125,36 +140,3 @@ function encodeRecipe(recipe: Recipe): string {
   )
 }
 
-<script>
-  // Initialize bookmark button states after HTMX swaps in this partial
-  document.querySelectorAll(".recipe-card__bookmark").forEach((btn) => {
-    const id = (btn as HTMLElement).dataset.recipeId;
-    const bookmarks = JSON.parse(
-      localStorage.getItem("recipesuggest_bookmarks") || "[]",
-    );
-    const isBookmarked = bookmarks.some((r: any) => r.id === id);
-    if (isBookmarked) {
-      btn.classList.add("is-bookmarked");
-      btn.querySelector("span")!.textContent = "★";
-    }
-  });
-
-  document.querySelectorAll(".recipe-card[data-recipe]").forEach(async (card) => {
-    const el = card as HTMLElement;
-    const raw = el.dataset.recipe;
-    if (!raw || typeof window.ensureRecipeImage !== "function") return;
-    try {
-      const recipe = JSON.parse(decodeURIComponent(escape(atob(raw))));
-      const imageUrl = await window.ensureRecipeImage(recipe);
-      if (typeof window.applyRecipeImageToCard === "function") {
-        window.applyRecipeImageToCard(el, recipe, imageUrl);
-      }
-    } catch (_e) {
-      const placeholder = el.querySelector(".recipe-card__placeholder");
-      if (placeholder) {
-        placeholder.textContent = "Photo unavailable";
-        placeholder.classList.remove("recipe-card__placeholder--loading");
-      }
-    }
-  });
-</script>

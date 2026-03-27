@@ -203,11 +203,7 @@ import {
 
         <form
           id="suggest-form"
-          hx-post="/api/suggest"
-          hx-target="#recipe-results"
-          hx-swap="innerHTML"
-          hx-indicator="#recipe-results"
-          @htmx:before-request="onBeforeRequest($event)"
+          @submit.prevent="submitSuggest(false)"
         >
           <input type="hidden" name="ingredients" :value="ingredients.join(',')" />
           <input type="hidden" name="constraints" :value="constraintsPayload()" />
@@ -309,6 +305,12 @@ import {
           <div class="empty-state__icon">🥘</div>
           <p class="empty-state__text">Add your ingredients above and hit <strong>Suggest Recipes</strong> to get started.</p>
         </div>
+      </div>
+      <div class="recipes-section__actions" x-show="canLoadMore">
+        <button type="button" class="btn btn--ghost" :disabled="loading" @click="submitSuggest(true)">
+          <span x-show="!loading">Load 4 more</span>
+          <span x-show="loading">Loading…</span>
+        </button>
       </div>
     </section>
 
@@ -591,11 +593,10 @@ import {
       }
     };
 
-    // Re-initialize bookmark buttons after HTMX swaps in new content
-    document.body.addEventListener('htmx:afterSwap', () => {
+    window.initRecipeCards = function(root = document) {
       const key = 'recipesuggest_bookmarks';
       const bookmarks = JSON.parse(localStorage.getItem(key) || '[]');
-      document.querySelectorAll('.recipe-card__bookmark[data-recipe-id]').forEach(btn => {
+      root.querySelectorAll('.recipe-card__bookmark[data-recipe-id]').forEach(btn => {
         const id = btn.dataset.recipeId;
         const isBookmarked = bookmarks.some(r => r.id === id);
         if (isBookmarked) {
@@ -603,7 +604,26 @@ import {
           btn.querySelector('span').textContent = '★';
         }
       });
-    });
+
+      root.querySelectorAll('.recipe-card[data-recipe]').forEach(async (card) => {
+        const el = card;
+        const raw = el.dataset.recipe;
+        if (!raw || typeof window.ensureRecipeImage !== 'function') return;
+        try {
+          const recipe = JSON.parse(decodeURIComponent(escape(atob(raw))));
+          const imageUrl = await window.ensureRecipeImage(recipe);
+          if (typeof window.applyRecipeImageToCard === 'function') {
+            window.applyRecipeImageToCard(el, recipe, imageUrl);
+          }
+        } catch {
+          const placeholder = el.querySelector('.recipe-card__placeholder');
+          if (placeholder) {
+            placeholder.textContent = 'Photo unavailable';
+            placeholder.classList.remove('recipe-card__placeholder--loading');
+          }
+        }
+      });
+    };
 
     const initBookmarksStore = () => {
       // Bookmark store persisted in localStorage
@@ -637,6 +657,10 @@ import {
         modalOpen: false,
         modalMenuOpen: false,
         cookModeOpen: false,
+        canLoadMore: false,
+        loadedBatchCount: 0,
+        searchCacheKey: '',
+        seenRecipeIds: [],
         cookStepIndex: 0,
         cVegetarian: false,
         cVegan: false,
@@ -714,7 +738,7 @@ import {
 
           this.ingredients = [...entry.ingredients];
           this.$nextTick(() => {
-            document.getElementById('suggest-form')?.requestSubmit();
+            this.submitSuggest(false);
           });
         },
 
@@ -754,9 +778,118 @@ import {
           return out;
         },
 
-        onBeforeRequest(evt) {
+        currentSearchCacheKey() {
+          const constraints = JSON.parse(this.constraintsPayload());
+          const ingredients = [...this.ingredients]
+            .map((item) => item.trim().toLowerCase())
+            .filter(Boolean)
+            .sort();
+          return JSON.stringify({ ingredients, constraints });
+        },
+
+        readSearchCache() {
+          try {
+            return JSON.parse(localStorage.getItem('recipesuggest_search_cache_v1') || '{}');
+          } catch {
+            return {};
+          }
+        },
+
+        writeSearchCache(cache) {
+          localStorage.setItem('recipesuggest_search_cache_v1', JSON.stringify(cache));
+        },
+
+        extractRecipeIds(root) {
+          return Array.from(root.querySelectorAll('.recipe-card[data-recipe]'))
+            .map((card) => {
+              const raw = card.dataset.recipe;
+              if (!raw) return '';
+              try {
+                const recipe = JSON.parse(decodeURIComponent(escape(atob(raw))));
+                return String(recipe.id || '');
+              } catch {
+                return '';
+              }
+            })
+            .filter(Boolean);
+        },
+
+        renderSuggestHtml(html, append = false) {
+          const target = document.getElementById('recipe-results');
+          if (!target) return [];
+          if (append) {
+            target.insertAdjacentHTML('beforeend', html);
+          } else {
+            target.innerHTML = html;
+            window.scrollTo({ top: target.offsetTop ? target.offsetTop - 20 : 0, behavior: 'smooth' });
+          }
+          window.initRecipeCards?.(target);
+          const ids = this.extractRecipeIds(target);
+          this.seenRecipeIds = ids;
+          return ids;
+        },
+
+        async submitSuggest(append = false) {
+          if (!this.ingredients.length || this.loading) return;
+
+          if (!append) {
+            this.searchCacheKey = this.currentSearchCacheKey();
+            this.loadedBatchCount = 0;
+            this.seenRecipeIds = [];
+            this.onBeforeRequest();
+          }
+
+          const key = this.searchCacheKey || this.currentSearchCacheKey();
+          const batchIndex = append ? this.loadedBatchCount : 0;
+          const cachedBatch = this.readSearchCache()?.[key]?.batches?.[batchIndex];
+
+          if (cachedBatch?.html) {
+            const ids = this.renderSuggestHtml(cachedBatch.html, append);
+            this.loadedBatchCount = batchIndex + 1;
+            this.canLoadMore = ids.length > 0;
+            this.loading = false;
+            return;
+          }
+
+          this.loading = true;
+          try {
+            const form = document.getElementById('suggest-form');
+            const formData = new FormData(form);
+            formData.set('excludeRecipeIds', JSON.stringify(append ? this.seenRecipeIds : []));
+            const response = await fetch('/api/suggest', {
+              method: 'POST',
+              body: formData,
+              credentials: 'same-origin',
+            });
+            const html = await response.text();
+            const ids = this.renderSuggestHtml(html, append);
+            if (response.ok && ids.length > 0) {
+              const cache = this.readSearchCache();
+              const entry = cache[key] || { batches: [] };
+              entry.batches[batchIndex] = { html };
+              cache[key] = entry;
+              this.writeSearchCache(cache);
+              this.loadedBatchCount = batchIndex + 1;
+              this.canLoadMore = true;
+            } else {
+              this.canLoadMore = false;
+            }
+          } catch {
+            const target = document.getElementById('recipe-results');
+            if (target) {
+              target.innerHTML = this.suggestRetryMarkup();
+              this.bindSuggestRetryOnce();
+            }
+            this.canLoadMore = false;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        onBeforeRequest() {
           this.saveHistory();
           this.loading = true;
+          this.canLoadMore = false;
           // Show skeleton loading
           const target = document.getElementById('recipe-results');
           if (target) {

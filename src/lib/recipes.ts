@@ -152,9 +152,16 @@ function constraintsPromptBlock(c: SuggestConstraints): string {
 export async function suggestRecipes(
   ingredients: string[],
   constraints: SuggestConstraints = {},
+  options: { excludeRecipeIds?: string[] } = {},
 ): Promise<Recipe[]> {
   const c = normalizeConstraints(constraints);
-  const key = cacheKey(ingredients, c);
+  const excludeRecipeIds = Array.isArray(options.excludeRecipeIds)
+    ? options.excludeRecipeIds.map((v) => String(v).trim()).filter(Boolean).sort()
+    : [];
+  const key = JSON.stringify({
+    base: cacheKey(ingredients, c),
+    excludeRecipeIds,
+  });
 
   if (cache.has(key)) {
     return cache.get(key)!;
@@ -189,7 +196,10 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
   "instructions": ["Step 1 — ...", "Step 2 — ..."]
 }`;
 
-  const userPrompt = `I have these ingredients: ${ingredients.join(", ")}${constraintsPromptBlock(c)}`;
+  const excludePrompt = excludeRecipeIds.length
+    ? `\nDo not repeat or closely duplicate any recipe whose id is in this list: ${excludeRecipeIds.join(", ")}. Create four clearly different recipe ideas from the earlier batch.`
+    : "";
+  const userPrompt = `I have these ingredients: ${ingredients.join(", ")}${constraintsPromptBlock(c)}${excludePrompt}`;
 
   const response = await client.chat.completions.create({
     model: "gpt-4o-mini",

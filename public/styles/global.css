@@ -1297,6 +1297,12 @@ html[data-theme="light"] body::before {
   font-weight: 500;
 }
 
+.recipes-section__actions {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-lg);
+}
+
 /* ── Responsive ───────────────────────────────── */
 @media (max-width: 640px) {
   .site-header__nav {
