@@ -1226,6 +1226,49 @@ body::before {
   min-height: 1.25rem;
 }
 
+.cook-mode__timer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.cook-timer__label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.cook-timer__input {
+  width: 4rem;
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+.cook-timer__display {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.cook-timer__done {
+  width: 100%;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--green);
+}
+
 @media print {
   .no-print {
     display: none !important;

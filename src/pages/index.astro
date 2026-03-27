@@ -313,7 +313,7 @@ import {
     >
       <div class="cook-mode__inner">
         <header class="cook-mode__header">
-          <button type="button" class="cook-mode__close" @click="cookModeOpen = false" aria-label="Exit cook mode">×</button>
+          <button type="button" class="cook-mode__close" @click="closeCookMode()" aria-label="Exit cook mode">×</button>
           <p class="cook-mode__title" x-text="activeRecipe.title"></p>
           <p class="cook-mode__progress">
             Step <span x-text="cookStepIndex + 1"></span>
@@ -325,6 +325,18 @@ import {
           <p class="cook-mode__step" x-show="activeRecipe.instructions && activeRecipe.instructions.length" x-text="activeRecipe.instructions[cookStepIndex]"></p>
           <p class="cook-mode__empty" x-show="!activeRecipe.instructions || activeRecipe.instructions.length === 0">No steps for this recipe.</p>
         </div>
+
+        <div class="cook-mode__timer no-print">
+          <label class="cook-timer__label">
+            Timer (minutes)
+            <input type="number" class="cook-timer__input" x-model="cookTimerMins" min="1" max="120" />
+          </label>
+          <button type="button" class="btn btn--ghost" @click="startCookTimer()" :disabled="cookTimerRemaining !== null">Start</button>
+          <button type="button" class="btn btn--ghost" @click="stopCookTimer()" x-show="cookTimerRemaining !== null">Stop</button>
+          <span class="cook-timer__display" x-show="cookTimerRemaining !== null" x-text="formatCookCountdown(cookTimerRemaining)"></span>
+          <p class="cook-timer__done" x-show="cookTimerDone">Time is up!</p>
+        </div>
+
         <footer class="cook-mode__footer">
           <button type="button" class="btn btn--ghost" @click="prevCookStep()" :disabled="cookStepIndex === 0">Previous</button>
           <button
@@ -337,7 +349,7 @@ import {
             type="button"
             class="btn btn--primary"
             x-show="activeRecipe.instructions && activeRecipe.instructions.length > 0 && cookStepIndex >= activeRecipe.instructions.length - 1"
-            @click="cookModeOpen = false"
+            @click="closeCookMode()"
           >Done</button>
         </footer>
       </div>
@@ -429,6 +441,10 @@ import {
         cNotes: '',
         copyStatus: '',
         _copyStatusTimer: null,
+        cookTimerMins: 5,
+        cookTimerRemaining: null,
+        cookTimerDone: false,
+        _cookTimerId: null,
         activeRecipe: {
           title: '',
           description: '',
@@ -515,6 +531,8 @@ import {
           this.cookModeOpen = false;
           this.cookStepIndex = 0;
           this.copyStatus = '';
+          this.stopCookTimer();
+          this.cookTimerDone = false;
         },
 
         showCopyStatus(msg) {
@@ -563,13 +581,70 @@ import {
 
         handleEscape() {
           if (this.cookModeOpen) {
-            this.cookModeOpen = false;
+            this.closeCookMode();
             return;
           }
           this.modalOpen = false;
         },
 
+        formatCookCountdown(sec) {
+          if (sec == null || sec < 0) return '';
+          const m = Math.floor(sec / 60);
+          const s = sec % 60;
+          return m + ':' + String(s).padStart(2, '0');
+        },
+
+        startCookTimer() {
+          this.stopCookTimer();
+          this.cookTimerDone = false;
+          let mins = parseInt(String(this.cookTimerMins), 10);
+          if (!Number.isFinite(mins) || mins < 1) mins = 5;
+          if (mins > 120) mins = 120;
+          this.cookTimerRemaining = mins * 60;
+          this._cookTimerId = setInterval(() => {
+            this.cookTimerRemaining--;
+            if (this.cookTimerRemaining <= 0) {
+              this.stopCookTimer(true);
+            }
+          }, 1000);
+        },
+
+        stopCookTimer(ding) {
+          if (this._cookTimerId) {
+            clearInterval(this._cookTimerId);
+            this._cookTimerId = null;
+          }
+          this.cookTimerRemaining = null;
+          if (ding) {
+            this.cookTimerDone = true;
+            try {
+              const AC = window.AudioContext || window.webkitAudioContext;
+              if (AC) {
+                const ctx = new AC();
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.connect(g);
+                g.connect(ctx.destination);
+                o.frequency.value = 880;
+                g.gain.value = 0.07;
+                o.start();
+                setTimeout(() => {
+                  o.stop();
+                  ctx.close();
+                }, 220);
+              }
+            } catch (_e) {}
+          }
+        },
+
+        closeCookMode() {
+          this.stopCookTimer();
+          this.cookModeOpen = false;
+        },
+
         openCookMode() {
+          this.stopCookTimer();
+          this.cookTimerDone = false;
           this.cookStepIndex = 0;
           this.cookModeOpen = true;
         },
