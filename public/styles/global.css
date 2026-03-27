@@ -1219,6 +1219,13 @@ body::before {
   border-top: 1px solid var(--border);
 }
 
+.modal__copy-status {
+  font-size: 0.88rem;
+  color: var(--green);
+  margin-top: var(--space-sm);
+  min-height: 1.25rem;
+}
+
 @media print {
   .no-print {
     display: none !important;

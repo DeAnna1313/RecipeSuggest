@@ -291,8 +291,12 @@ import {
           </template>
         </ol>
 
+        <p class="modal__copy-status no-print" x-show="copyStatus" x-text="copyStatus"></p>
+
         <div class="modal__toolbar no-print">
           <button type="button" class="btn btn--ghost" @click="window.print()">Print</button>
+          <button type="button" class="btn btn--ghost" @click="copyIngredientList()">Copy ingredients</button>
+          <button type="button" class="btn btn--ghost" @click="copyShopList()" title="Lines that may not match your kitchen list (heuristic)">Copy shop hints</button>
           <button type="button" class="btn btn--primary" @click="openCookMode()">Cook mode</button>
         </div>
       </div>
@@ -423,6 +427,8 @@ import {
         cNutFree: false,
         cMaxMins: '',
         cNotes: '',
+        copyStatus: '',
+        _copyStatusTimer: null,
         activeRecipe: {
           title: '',
           description: '',
@@ -508,6 +514,51 @@ import {
           this.modalOpen = true;
           this.cookModeOpen = false;
           this.cookStepIndex = 0;
+          this.copyStatus = '';
+        },
+
+        showCopyStatus(msg) {
+          this.copyStatus = msg;
+          if (this._copyStatusTimer) clearTimeout(this._copyStatusTimer);
+          this._copyStatusTimer = setTimeout(() => {
+            this.copyStatus = '';
+          }, 2200);
+        },
+
+        async copyIngredientList() {
+          const lines = this.activeRecipe.ingredients || [];
+          if (!lines.length) return;
+          try {
+            await navigator.clipboard.writeText(lines.join('\n'));
+            this.showCopyStatus('Ingredients copied to clipboard');
+          } catch {
+            this.showCopyStatus('Could not copy');
+          }
+        },
+
+        linesYouMayNeedToBuy() {
+          const pantry = (this.ingredients || [])
+            .map((i) => String(i).toLowerCase().trim())
+            .filter((p) => p.length >= 2);
+          const rows = this.activeRecipe.ingredients || [];
+          const out = [];
+          for (const line of rows) {
+            const l = String(line).toLowerCase();
+            const hit = pantry.some((p) => l.includes(p));
+            if (!hit) out.push(line);
+          }
+          return out.length ? out : [...rows];
+        },
+
+        async copyShopList() {
+          const lines = this.linesYouMayNeedToBuy();
+          if (!lines.length) return;
+          try {
+            await navigator.clipboard.writeText(lines.join('\n'));
+            this.showCopyStatus('Shopping hints copied');
+          } catch {
+            this.showCopyStatus('Could not copy');
+          }
         },
 
         handleEscape() {
