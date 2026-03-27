@@ -1,0 +1,32 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.10.1
+2 info using node@v25.7.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest\.npmrc
+5 silly config load:file:C:\Users\DeAnna\.npmrc
+6 silly config load:file:C:\Users\DeAnna\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm exec node .\node_modules\astro\bin\astro.mjs build
+8 verbose argv "exec" "--package" "node@22" "--" "node" ".\\node_modules\\astro\\bin\\astro.mjs" "build"
+9 verbose logfile logs-max:10 dir:C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest\.npm-cache\_logs\2026-03-26T05_54_35_924Z-
+10 verbose logfile C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest\.npm-cache\_logs\2026-03-26T05_54_35_924Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 http fetch GET 200 https://registry.npmjs.org/node 148ms (cache revalidated)
+14 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+15 warn exec The following package was not found and will be installed: node@22.22.2
+16 silly idealTree buildDeps
+17 silly fetch manifest node@22.22.2
+18 silly packumentCache full:https://registry.npmjs.org/node cache-miss
+19 http fetch GET 200 https://registry.npmjs.org/node 46ms (cache revalidated)
+20 silly packumentCache full:https://registry.npmjs.org/node set size:1290572 disposed:false
+21 silly placeDep ROOT node@22.22.2 REPLACE for:  want: 22.22.2
+22 silly reify moves {}
+23 silly audit bulk request { 'node-bin-setup': [ '1.1.4' ], node: [ '22.22.2' ] }
+24 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 48ms
+25 silly audit report {}
+26 verbose cwd C:\Users\DeAnna\Desktop\AI-First\workspace01\RecipeSuggest
+27 verbose os Windows_NT 10.0.26200
+28 verbose node v25.7.0
+29 verbose npm  v11.10.1
+30 verbose exit 0
+31 info ok

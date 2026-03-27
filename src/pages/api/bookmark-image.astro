@@ -1,0 +1,26 @@
+---
+import { generateRecipeImage, type Recipe } from "../../lib/recipes";
+
+if (Astro.request.method !== "POST") {
+  return new Response("Method not allowed", { status: 405 });
+}
+
+try {
+  const recipe = (await Astro.request.json()) as Recipe | null;
+
+  if (!recipe?.title || !Array.isArray(recipe.ingredients)) {
+    return new Response("Invalid recipe payload.", { status: 400 });
+  }
+
+  const imageUrl = await generateRecipeImage(recipe);
+
+  return Response.json({ imageUrl });
+} catch (error: any) {
+  return Response.json(
+    {
+      error: error?.message ?? "Failed to generate bookmark image.",
+    },
+    { status: 500 },
+  );
+}
+---

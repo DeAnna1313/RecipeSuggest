@@ -1,0 +1,11 @@
+[2m23:18:25[22m [34m[@astrojs/netlify][39m Enabling sessions with Netlify Blobs
+[vite] connected.
+[2m23:18:27[22m [34m[vite][39m Environment loaded
+[2m23:18:27[22m [34m[vite][39m Middleware loaded. Emulating features: aiGateway, blobs, edgeFunctions, functions, geolocation, headers, images, redirects, static.
+[2m23:18:27[22m [34m[vite][39m 💭 Linking this project to a Netlify site lets you deploy your site, use any environment variables defined on your team and site and much more. Run npx netlify init to get started.
+[2m23:18:27[22m [34m[types][39m Generated [2m1ms[22m
+[33m[1m23:18:27[22m [WARN] [content][39m Content config not loaded
+[2m23:18:27[22m [34m[vite][39m Re-optimizing dependencies because vite config has changed
+[42m[1m astro [22m[49m [32mv6.0.8[39m [2mready in[22m 3796 [2mms[22m
+[2m┃[22m Local    [36mhttp://127.0.0.1:4322/[39m
+[2m23:18:27[22m [32mwatching for file changes...[39m

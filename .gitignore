@@ -26,3 +26,6 @@ pnpm-debug.log*
 
 # Local Netlify folder
 .netlify
+
+# clerk configuration (can include secrets)
+/.clerk/

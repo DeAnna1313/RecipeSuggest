@@ -1,5 +1,12 @@
 ---
 import Base from '../layouts/Base.astro';
+import {
+  Show,
+  SignInButton,
+  SignOutButton,
+  SignUpButton,
+  UserButton,
+} from '@clerk/astro/components';
 ---
 
 <Base>
@@ -7,10 +14,36 @@ import Base from '../layouts/Base.astro';
 
     <!-- ─── Header ─────────────────────────────── -->
     <header class="site-header">
-      <a href="/" class="site-header__logo">
-        <span class="site-header__logo-icon">🍳</span>
-        RecipeSuggest
-      </a>
+      <div class="site-header__nav">
+        <a href="/" class="site-header__logo">
+          <span class="site-header__logo-icon">🍳</span>
+          RecipeSuggest
+        </a>
+        <nav class="site-nav">
+          <a href="/" class="site-nav__link site-nav__link--active">Suggest</a>
+          <a href="/bookmarks" class="site-nav__link">Bookmarks</a>
+        </nav>
+        <div class="auth-actions">
+          <Show when="signed-out">
+            <SignInButton mode="modal" asChild>
+              <button type="button" class="auth-link">Sign in</button>
+            </SignInButton>
+            <SignUpButton mode="modal" asChild>
+              <button type="button" class="auth-link auth-link--primary">Sign up</button>
+            </SignUpButton>
+            <SignInButton mode="modal" asChild>
+              <button type="button" class="auth-link auth-link--subtle">Forgot password?</button>
+            </SignInButton>
+          </Show>
+          <Show when="signed-in">
+            <a href="/bookmarks" class="auth-link">My bookmarks</a>
+            <UserButton />
+            <SignOutButton asChild>
+              <button type="button" class="auth-link auth-link--subtle">Sign out</button>
+            </SignOutButton>
+          </Show>
+        </div>
+      </div>
       <p class="site-header__tagline">Type your ingredients. Get instant recipe ideas.</p>
     </header>
 
@@ -69,6 +102,32 @@ import Base from '../layouts/Base.astro';
           ></button>
         </form>
       </div>
+
+      <div class="recent-searches" x-show="history.length > 0">
+        <div class="recent-searches__header">
+          <p class="recent-searches__title">Recent searches</p>
+          <button
+            class="recent-searches__clear"
+            type="button"
+            @click="clearHistory()"
+          >
+            Clear history
+          </button>
+        </div>
+
+        <div class="recent-searches__list">
+          <template x-for="entry in history" :key="entry.key">
+            <button
+              class="recent-searches__item"
+              type="button"
+              @click="runHistorySearch(entry)"
+              :disabled="loading"
+            >
+              <span x-text="entry.ingredients.join(', ')"></span>
+            </button>
+          </template>
+        </div>
+      </div>
     </section>
 
     <!-- ─── Bookmarks Section ──────────────────── -->
@@ -85,6 +144,8 @@ import Base from '../layouts/Base.astro';
         Bookmarked Recipes
         <span class="bookmarks-toggle__count" x-text="$store.bookmarks.list.length"></span>
       </button>
+
+      <a href="/bookmarks" class="bookmarks-section__link">Open bookmarks page</a>
 
       <div class="recipe-grid" x-show="showBookmarks" x-transition>
         <template x-for="recipe in $store.bookmarks.list" :key="recipe.id">
@@ -250,6 +311,7 @@ import Base from '../layouts/Base.astro';
       Alpine.data('recipeApp', () => ({
         ingredients: [],
         currentInput: '',
+        history: [],
         loading: false,
         modalOpen: false,
         activeRecipe: {
@@ -269,11 +331,49 @@ import Base from '../layouts/Base.astro';
           this.currentInput = '';
         },
 
+        historyKey(ingredients) {
+          return [...ingredients]
+            .map(item => item.trim().toLowerCase())
+            .sort()
+            .join('|');
+        },
+
+        saveHistory() {
+          if (this.ingredients.length === 0) return;
+
+          const entry = {
+            key: this.historyKey(this.ingredients),
+            ingredients: [...this.ingredients],
+          };
+
+          this.history = [
+            entry,
+            ...this.history.filter(item => item.key !== entry.key),
+          ].slice(0, 20);
+
+          localStorage.setItem('recipesuggest_recent_searches', JSON.stringify(this.history));
+        },
+
+        clearHistory() {
+          this.history = [];
+          localStorage.removeItem('recipesuggest_recent_searches');
+        },
+
+        runHistorySearch(entry) {
+          if (this.loading) return;
+
+          this.ingredients = [...entry.ingredients];
+          this.$nextTick(() => {
+            document.getElementById('suggest-form')?.requestSubmit();
+          });
+        },
+
         removeIngredient(idx) {
           this.ingredients.splice(idx, 1);
         },
 
         onBeforeRequest(evt) {
+          this.saveHistory();
           this.loading = true;
           // Show skeleton loading
           const target = document.getElementById('recipe-results');
@@ -300,6 +400,8 @@ import Base from '../layouts/Base.astro';
         },
 
         init() {
+          this.history = JSON.parse(localStorage.getItem('recipesuggest_recent_searches') || '[]');
+
           // Reset loading state when HTMX finishes
           document.body.addEventListener('htmx:afterRequest', () => {
             this.loading = false;

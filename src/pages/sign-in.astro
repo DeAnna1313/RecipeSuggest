@@ -1,0 +1,37 @@
+---
+import Base from "../layouts/Base.astro";
+import { SignIn } from "@clerk/astro/components";
+---
+
+<Base title="Sign In — RecipeSuggest">
+  <div class="container">
+    <header class="site-header">
+      <div class="site-header__nav">
+        <a href="/" class="site-header__logo">
+          <span class="site-header__logo-icon">🍳</span>
+          RecipeSuggest
+        </a>
+        <nav class="site-nav">
+          <a href="/" class="site-nav__link">Suggest</a>
+          <a href="/bookmarks" class="site-nav__link">Bookmarks</a>
+          <a href="/sign-up" class="site-nav__link">Sign up</a>
+        </nav>
+      </div>
+      <p class="site-header__tagline">Sign in to manage your account and reset your password.</p>
+    </header>
+
+    <section class="auth-page">
+      <div class="auth-page__intro">
+        <p class="auth-page__eyebrow">Account access</p>
+        <h1 class="auth-page__title">Welcome back</h1>
+        <p class="auth-page__copy">
+          Use the <strong>Forgot password?</strong> link in the sign-in form to receive a reset email from Clerk and set a new password.
+        </p>
+      </div>
+
+      <div class="auth-page__card">
+        <SignIn signUpUrl="/sign-up" />
+      </div>
+    </section>
+  </div>
+</Base>

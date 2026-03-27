@@ -118,6 +118,13 @@ body::before {
   text-align: center;
 }
 
+.site-header__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
 .site-header__logo {
   display: inline-flex;
   align-items: center;
@@ -139,6 +146,75 @@ body::before {
   font-size: 1rem;
   color: var(--text-secondary);
   font-weight: 400;
+}
+
+.site-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.auth-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.auth-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.auth-link:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-card-hover);
+}
+
+.auth-link--primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #0f0f14;
+}
+
+.auth-link--primary:hover {
+  background: var(--accent-hover);
+}
+
+.auth-link--subtle {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.site-nav__link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.45rem 0.8rem;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  transition: all var(--duration) var(--ease);
+}
+
+.site-nav__link:hover,
+.site-nav__link--active {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border-color: var(--border);
 }
 
 /* ── Ingredient Input Area ────────────────────── */
@@ -238,6 +314,17 @@ body::before {
   transform: translateY(0);
 }
 
+.btn--ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.btn--ghost:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-hover);
+}
+
 /* Tags */
 .tag-list {
   display: flex;
@@ -297,6 +384,78 @@ body::before {
 .ingredient-panel__count {
   font-size: 0.82rem;
   color: var(--text-muted);
+}
+
+.recent-searches {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+
+.recent-searches__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.recent-searches__title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.recent-searches__clear {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--duration) var(--ease);
+}
+
+.recent-searches__clear:hover {
+  opacity: 0.8;
+}
+
+.recent-searches__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.recent-searches__item {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  padding: 0.45rem 0.85rem;
+  transition:
+    border-color var(--duration) var(--ease),
+    color var(--duration) var(--ease),
+    transform var(--duration) var(--ease),
+    background var(--duration) var(--ease);
+}
+
+.recent-searches__item:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.recent-searches__item:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 /* ── Recipe Grid ──────────────────────────────── */
@@ -686,6 +845,195 @@ body::before {
   margin-bottom: var(--space-2xl);
 }
 
+.bookmarks-section__link {
+  display: inline-flex;
+  margin-top: var(--space-sm);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: color var(--duration) var(--ease);
+}
+
+.bookmarks-section__link:hover {
+  color: var(--accent);
+}
+
+.bookmarks-page {
+  padding-bottom: var(--space-3xl);
+}
+
+.auth-page {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  gap: var(--space-2xl);
+  align-items: start;
+  padding-bottom: var(--space-3xl);
+}
+
+.auth-page__intro {
+  padding-top: var(--space-lg);
+}
+
+.auth-page__eyebrow {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.auth-page__title {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1.05;
+  margin-bottom: var(--space-sm);
+}
+
+.auth-page__copy {
+  color: var(--text-secondary);
+  max-width: 38ch;
+}
+
+.auth-page__card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-lg);
+  min-height: 480px;
+}
+
+.bookmarks-page__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.bookmarks-page__eyebrow,
+.bookmark-card__section-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.bookmarks-page__title {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.bookmarks-page__status {
+  margin-bottom: var(--space-lg);
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.bookmarks-page__grid {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.bookmark-card {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: var(--space-lg);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.bookmark-card__media {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(245, 158, 11, 0.12), transparent 55%),
+    var(--bg-secondary);
+  position: relative;
+}
+
+.bookmark-card__image,
+.bookmark-card__placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+}
+
+.bookmark-card__image {
+  object-fit: cover;
+  display: block;
+}
+
+.bookmark-card__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.bookmark-card__placeholder--loading {
+  color: var(--accent);
+}
+
+.bookmark-card__body {
+  padding: var(--space-xl);
+}
+
+.bookmark-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+.bookmark-card__title {
+  font-size: 1.35rem;
+  margin-bottom: var(--space-xs);
+}
+
+.bookmark-card__description {
+  color: var(--text-secondary);
+  max-width: 58ch;
+}
+
+.bookmark-card__remove {
+  background: none;
+  border: none;
+  color: var(--red);
+  font-family: var(--font-sans);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.bookmark-card__section {
+  margin-top: var(--space-lg);
+}
+
+.bookmark-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.bookmark-card__steps {
+  margin-top: var(--space-sm);
+  padding-left: 1.1rem;
+  color: var(--text-secondary);
+  display: grid;
+  gap: 0.65rem;
+}
+
 .bookmarks-toggle {
   display: flex;
   align-items: center;
@@ -727,6 +1075,14 @@ body::before {
 
 /* ── Responsive ───────────────────────────────── */
 @media (max-width: 640px) {
+  .site-header__nav {
+    flex-direction: column;
+  }
+
+  .auth-actions {
+    justify-content: center;
+  }
+
   .site-header__logo {
     font-size: 1.5rem;
   }
@@ -743,6 +1099,26 @@ body::before {
     flex-direction: column;
     gap: var(--space-md);
     align-items: stretch;
+  }
+
+  .recent-searches__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bookmarks-page__header,
+  .bookmark-card__header,
+  .auth-page {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .auth-page {
+    display: flex;
+  }
+
+  .bookmark-card {
+    grid-template-columns: 1fr;
   }
 
   .modal {
