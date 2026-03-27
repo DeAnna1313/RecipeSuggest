@@ -149,6 +149,9 @@ import {
         persist() {
           const cleanBookmarks = this.bookmarks.map(({ isGeneratingImage, ...recipe }) => recipe);
           localStorage.setItem('recipesuggest_bookmarks', JSON.stringify(cleanBookmarks));
+          if (typeof window.queueBookmarkSync === 'function') {
+            window.queueBookmarkSync();
+          }
         },
 
         removeBookmark(id) {
@@ -160,6 +163,9 @@ import {
           this.bookmarks = [];
           localStorage.removeItem('recipesuggest_bookmarks');
           this.statusMessage = '';
+          if (typeof window.queueBookmarkSync === 'function') {
+            window.queueBookmarkSync();
+          }
         },
 
         async populateMissingImages() {
@@ -197,9 +203,33 @@ import {
           this.statusMessage = '';
         },
 
-        init() {
-          this.bookmarks = JSON.parse(localStorage.getItem('recipesuggest_bookmarks') || '[]')
-            .map(recipe => ({ ...recipe, isGeneratingImage: false }));
+        async init() {
+          const rawLocal = JSON.parse(localStorage.getItem('recipesuggest_bookmarks') || '[]');
+          const local = rawLocal.map(recipe => ({ ...recipe, isGeneratingImage: false }));
+          this.bookmarks = local;
+
+          try {
+            const res = await fetch('/api/bookmarks-data', { credentials: 'same-origin' });
+            if (res.ok) {
+              const data = await res.json();
+              const server = Array.isArray(data.recipes) ? data.recipes : [];
+              if (server.length > 0) {
+                this.bookmarks = server.map(recipe => ({
+                  ...recipe,
+                  isGeneratingImage: false,
+                }));
+                this.persist();
+              } else if (local.length > 0) {
+                const clean = local.map(({ isGeneratingImage, ...recipe }) => recipe);
+                await fetch('/api/bookmarks-data', {
+                  method: 'PUT',
+                  credentials: 'same-origin',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ recipes: clean }),
+                });
+              }
+            }
+          } catch (_e) {}
 
           this.populateMissingImages();
         },

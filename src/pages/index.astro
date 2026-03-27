@@ -364,6 +364,9 @@ import {
       if (window.Alpine) {
         Alpine.store('bookmarks').list = bookmarks;
       }
+      if (typeof window.queueBookmarkSync === "function") {
+        window.queueBookmarkSync();
+      }
     };
 
     // Re-initialize bookmark buttons after HTMX swaps in new content
@@ -396,6 +399,9 @@ import {
             this.list = [...this.list, recipe];
           }
           localStorage.setItem('recipesuggest_bookmarks', JSON.stringify(this.list));
+          if (typeof window.queueBookmarkSync === "function") {
+            window.queueBookmarkSync();
+          }
         }
       });
     });

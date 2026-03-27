@@ -1,0 +1,60 @@
+---
+export const prerender = false;
+
+import { getStore } from "@netlify/blobs";
+import type { Recipe } from "../../lib/recipes";
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+const auth = await Astro.locals.auth();
+const userId = auth.userId;
+
+if (!userId) {
+  return json({ error: "Unauthorized" }, 401);
+}
+
+let store: ReturnType<typeof getStore>;
+try {
+  store = getStore("recipe-bookmarks");
+} catch {
+  return json({ error: "Bookmarks storage is not configured." }, 503);
+}
+
+const blobKey = `user-${userId}`;
+
+if (Astro.request.method === "GET") {
+  try {
+    const data = await store.get(blobKey, { type: "json" });
+    const recipes = Array.isArray(data) ? (data as Recipe[]) : [];
+    return json({ recipes });
+  } catch {
+    return json({ recipes: [] });
+  }
+}
+
+if (Astro.request.method === "PUT") {
+  try {
+    const body = (await Astro.request.json()) as { recipes?: unknown };
+    const raw = Array.isArray(body?.recipes) ? body.recipes : [];
+    const recipes = raw.filter(
+      (r): r is Recipe =>
+        r !== null &&
+        typeof r === "object" &&
+        typeof (r as Recipe).id === "string" &&
+        typeof (r as Recipe).title === "string",
+    );
+    await store.setJSON(blobKey, recipes);
+    return json({ ok: true });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Save failed";
+    return json({ error: msg }, 500);
+  }
+}
+
+return new Response("Method not allowed", { status: 405 });
+---
