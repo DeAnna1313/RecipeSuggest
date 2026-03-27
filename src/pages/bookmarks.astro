@@ -114,12 +114,13 @@ import {
                   <p class="bookmark-card__description" x-text="recipe.description"></p>
                 </div>
                 <button
-                  class="bookmark-card__remove no-print"
+                  class="recipe-card__bookmark is-bookmarked no-print"
                   type="button"
                   @click="removeBookmark(recipe.id)"
                   aria-label="Remove bookmark"
+                  title="Remove bookmark"
                 >
-                  Remove
+                  ★
                 </button>
               </div>
 

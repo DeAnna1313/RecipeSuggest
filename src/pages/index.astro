@@ -325,7 +325,18 @@ import {
       <div class="modal" @click.stop>
         <button class="modal__close no-print" @click="modalOpen = false" aria-label="Close modal">×</button>
 
-        <h2 class="modal__title" x-text="activeRecipe.title"></h2>
+        <div class="modal__header">
+          <h2 class="modal__title" x-text="activeRecipe.title"></h2>
+          <button
+            type="button"
+            class="recipe-card__bookmark no-print"
+            :class="{ 'is-bookmarked': $store.bookmarks.has(activeRecipe.id) }"
+            @click.stop="$store.bookmarks.toggle(activeRecipe)"
+            :title="$store.bookmarks.has(activeRecipe.id) ? 'Remove bookmark' : 'Save bookmark'"
+            :aria-label="$store.bookmarks.has(activeRecipe.id) ? 'Remove bookmark' : 'Save bookmark'"
+            x-text="$store.bookmarks.has(activeRecipe.id) ? '★' : '☆'"
+          ></button>
+        </div>
         <p class="modal__desc" x-text="activeRecipe.description"></p>
 
         <div class="modal__meta">
