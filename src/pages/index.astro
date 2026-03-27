@@ -389,22 +389,34 @@ import {
         <p class="modal__copy-status no-print" x-show="copyStatus" x-text="copyStatus"></p>
 
         <div class="modal__toolbar no-print">
-          <button type="button" class="btn btn--ghost" @click="window.print()">Print</button>
-          <button type="button" class="btn btn--ghost" @click="downloadActiveRecipeHtml()">Download HTML</button>
-          <button type="button" class="btn btn--ghost" @click="copyIngredientList()">Copy ingredients</button>
-          <button type="button" class="btn btn--ghost" @click="copyShopList()" title="Lines that may not match your kitchen list (heuristic)">Copy shop hints</button>
-          <button type="button" class="btn btn--ghost" @click="copyMergedShopList()" title="Combine shop hints from every bookmark using your pantry list">Merged shop (bookmarks)</button>
-          <button
-            type="button"
-            class="btn btn--ghost"
-            x-show="!activeRecipe.imageUrl"
-            :disabled="previewImageLoading"
-            @click="loadPreviewImage()"
-          >
-            <span x-show="!previewImageLoading">AI dish photo</span>
-            <span x-show="previewImageLoading">Loading…</span>
-          </button>
-          <button type="button" class="btn btn--primary" @click="openCookMode()">Cook mode</button>
+          <div class="modal__menu" @click.outside="modalMenuOpen = false">
+            <button
+              type="button"
+              class="btn btn--ghost"
+              @click="modalMenuOpen = !modalMenuOpen"
+              :aria-expanded="modalMenuOpen"
+            >
+              Actions
+            </button>
+            <div class="modal__menu-list" x-show="modalMenuOpen" x-transition style="display: none;">
+              <button type="button" class="modal__menu-item" @click="runModalAction('print')">Print</button>
+              <button type="button" class="modal__menu-item" @click="runModalAction('download')">Download HTML</button>
+              <button type="button" class="modal__menu-item" @click="runModalAction('ingredients')">Copy ingredients</button>
+              <button type="button" class="modal__menu-item" @click="runModalAction('shop')">Copy shop hints</button>
+              <button type="button" class="modal__menu-item" @click="runModalAction('mergedShop')">Merged shop (bookmarks)</button>
+              <button
+                type="button"
+                class="modal__menu-item"
+                x-show="!activeRecipe.imageUrl"
+                :disabled="previewImageLoading"
+                @click="runModalAction('photo')"
+              >
+                <span x-show="!previewImageLoading">AI dish photo</span>
+                <span x-show="previewImageLoading">Loading…</span>
+              </button>
+              <button type="button" class="modal__menu-item" @click="runModalAction('cook')">Cook mode</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -623,6 +635,7 @@ import {
         history: [],
         loading: false,
         modalOpen: false,
+        modalMenuOpen: false,
         cookModeOpen: false,
         cookStepIndex: 0,
         cVegetarian: false,
@@ -768,6 +781,7 @@ import {
           const base = this.recipeBaseServings();
           this.modalTargetServings = base;
           this.modalOpen = true;
+          this.modalMenuOpen = false;
           this.cookModeOpen = false;
           this.cookStepIndex = 0;
           this.copyStatus = '';
@@ -961,11 +975,42 @@ import {
         },
 
         handleEscape() {
+          if (this.modalMenuOpen) {
+            this.modalMenuOpen = false;
+            return;
+          }
           if (this.cookModeOpen) {
             this.closeCookMode();
             return;
           }
           this.modalOpen = false;
+        },
+
+        runModalAction(action) {
+          this.modalMenuOpen = false;
+          switch (action) {
+            case 'print':
+              window.print();
+              return;
+            case 'download':
+              this.downloadActiveRecipeHtml();
+              return;
+            case 'ingredients':
+              this.copyIngredientList();
+              return;
+            case 'shop':
+              this.copyShopList();
+              return;
+            case 'mergedShop':
+              this.copyMergedShopList();
+              return;
+            case 'photo':
+              this.loadPreviewImage();
+              return;
+            case 'cook':
+              this.openCookMode();
+              return;
+          }
         },
 
         formatCookCountdown(sec) {

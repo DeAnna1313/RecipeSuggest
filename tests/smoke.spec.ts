@@ -74,6 +74,7 @@ test("suggest flow, modal, and cook mode", async ({ page }) => {
   await expect(page.locator(".modal__title")).toHaveText("Smoke Recipe");
   await expect(page.locator(".modal__ingredient").first()).toBeVisible();
 
+  await page.getByRole("button", { name: "Actions" }).click();
   await page.getByRole("button", { name: "Cook mode" }).click();
 
   await expect(
