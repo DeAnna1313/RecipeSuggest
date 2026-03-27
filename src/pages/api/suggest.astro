@@ -1,5 +1,24 @@
 ---
-import { suggestRecipes, type Recipe } from "../../lib/recipes";
+import {
+  suggestRecipes,
+  type Recipe,
+  type SuggestConstraints,
+} from "../../lib/recipes";
+import {
+  checkRateLimit,
+  clientKeyFromRequest,
+} from "../../lib/rate-limit";
+
+function parseConstraints(raw: string | undefined): SuggestConstraints {
+  if (!raw?.trim()) return {};
+  try {
+    const v = JSON.parse(raw) as unknown;
+    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+    return v as SuggestConstraints;
+  } catch {
+    return {};
+  }
+}
 
 // Only POST allowed
 if (Astro.request.method !== "POST") {
@@ -20,7 +39,26 @@ try {
   if (ingredients.length === 0) {
     error = "Please add at least one ingredient.";
   } else {
-    recipes = await suggestRecipes(ingredients);
+    const auth = await Astro.locals.auth();
+    const uid = auth.userId ?? null;
+    const rl = checkRateLimit(
+      clientKeyFromRequest(Astro.request, uid),
+      { maxAnon: 24, maxAuth: 96, windowMs: 15 * 60 * 1000 },
+      !!uid,
+    );
+    if (!rl.allowed) {
+      return new Response(
+        `<div class="error-message">Too many recipe requests. Please wait ${rl.retryAfterSeconds} seconds and try again.</div>`,
+        {
+          status: 429,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        },
+      );
+    }
+    const constraints = parseConstraints(
+      formData.get("constraints")?.toString(),
+    );
+    recipes = await suggestRecipes(ingredients, constraints);
   }
 } catch (e: any) {
   error = e.message ?? "Something went wrong. Please try again.";

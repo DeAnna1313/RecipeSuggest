@@ -8,4 +8,7 @@ export default defineConfig({
   output: 'server',
   adapter: netlify(),
   integrations: [clerk(), alpinejs()],
+  server: {
+    port: 4322,
+  },
 });
