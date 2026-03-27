@@ -8,8 +8,12 @@ export interface Recipe {
   difficulty: "easy" | "medium" | "hard";
   ingredients: string[];
   instructions: string[];
+  /** Portions the ingredient amounts are written for (used for scaling). */
+  servings?: number;
   imageUrl?: string;
 }
+
+export type UnitSystem = "us" | "metric";
 
 export interface SuggestConstraints {
   vegetarian?: boolean;
@@ -19,6 +23,10 @@ export interface SuggestConstraints {
   nutFree?: boolean;
   maxTimeMins?: number;
   notes?: string;
+  /** Target servings for every suggested recipe (default 4). */
+  servings?: number;
+  /** Ingredient measurements in US customary vs metric. */
+  unitSystem?: UnitSystem;
 }
 
 /* ── In-memory response cache ────────────────── */
@@ -40,6 +48,9 @@ function normalizeConstraints(
 ): SuggestConstraints {
   if (!c || typeof c !== "object") return {};
   const max = Number(c.maxTimeMins);
+  const serv = Number(c.servings);
+  const unit =
+    c.unitSystem === "metric" || c.unitSystem === "us" ? c.unitSystem : undefined;
   return {
     vegetarian: !!c.vegetarian,
     vegan: !!c.vegan,
@@ -49,6 +60,9 @@ function normalizeConstraints(
     maxTimeMins: Number.isFinite(max) && max > 0 ? Math.round(max) : undefined,
     notes:
       typeof c.notes === "string" && c.notes.trim() ? c.notes.trim() : undefined,
+    servings:
+      Number.isFinite(serv) && serv >= 1 && serv <= 24 ? Math.round(serv) : undefined,
+    unitSystem: unit,
   };
 }
 
@@ -97,7 +111,19 @@ function constraintsPromptBlock(c: SuggestConstraints): string {
   if (c.notes) {
     lines.push(`Additional user preferences: ${c.notes}`);
   }
-  if (lines.length === 0) return "";
+  const servings = c.servings ?? 4;
+  lines.push(
+    `Write ingredient amounts for ${servings} serving${servings === 1 ? "" : "s"} each (consistent across all four recipes). Include "servings": ${servings} in each recipe object.`,
+  );
+  if (c.unitSystem === "metric") {
+    lines.push(
+      "Use metric measurements only in ingredient lines (g, kg, ml, L, °C where relevant).",
+    );
+  } else if (c.unitSystem === "us") {
+    lines.push(
+      "Use US customary measurements in ingredient lines (cups, tbsp, tsp, oz, lb, °F where relevant).",
+    );
+  }
   return `\n\nStrict requirements (you must follow all):\n- ${lines.join("\n- ")}`;
 }
 
@@ -137,6 +163,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
   "description": "A short 1-2 sentence description of the dish.",
   "cookTime": "e.g. 25 mins",
   "difficulty": "easy" | "medium" | "hard",
+  "servings": 4,
   "ingredients": ["each item with amount if sensible"],
   "instructions": ["Step 1 — ...", "Step 2 — ..."]
 }`;
@@ -170,6 +197,15 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
 
   if (!Array.isArray(recipes) || recipes.length === 0) {
     throw new Error("AI returned an empty or invalid response.");
+  }
+
+  const targetServings = c.servings ?? 4;
+  for (const r of recipes) {
+    if (r && typeof r === "object") {
+      const n = Number((r as Recipe).servings);
+      (r as Recipe).servings =
+        Number.isFinite(n) && n > 0 ? Math.round(n) : targetServings;
+    }
   }
 
   cache.set(key, recipes);

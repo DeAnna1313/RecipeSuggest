@@ -10,7 +10,13 @@ import {
 ---
 
 <Base>
-  <div class="container" x-data="recipeApp" @keydown.escape.window="handleEscape()">
+  <div
+    class="container"
+    data-testid="recipe-app"
+    x-data="recipeApp"
+    @open-recipe="openModal($event.detail)"
+    @keydown.escape.window="handleEscape()"
+  >
 
     <!-- ─── Header ─────────────────────────────── -->
     <header class="site-header no-print">
@@ -23,6 +29,15 @@ import {
           <a href="/" class="site-nav__link site-nav__link--active">Suggest</a>
           <a href="/bookmarks" class="site-nav__link">Bookmarks</a>
         </nav>
+        <button
+          type="button"
+          class="theme-toggle no-print"
+          onclick="window.toggleRecipeSuggestTheme?.()"
+          title="Toggle light or dark theme"
+        >
+          <span class="theme-toggle__icon" aria-hidden="true">◐</span>
+          <span class="theme-toggle__label">Theme</span>
+        </button>
         <div class="auth-actions">
           <Show when="signed-out">
             <SignInButton mode="modal" asChild>
@@ -113,6 +128,25 @@ import {
             max="300"
             placeholder="e.g. 45"
           />
+        </label>
+        <label class="constraint-mins">
+          Servings (for amounts)
+          <input
+            type="number"
+            class="constraint-mins__input"
+            x-model="cServings"
+            min="1"
+            max="24"
+            placeholder="4"
+          />
+        </label>
+        <label class="constraint-notes">
+          Units
+          <select class="constraint-mins__input" x-model="cUnitSystem">
+            <option value="">Default (mixed)</option>
+            <option value="us">US (cups, tbsp, oz…)</option>
+            <option value="metric">Metric (g, ml, L…)</option>
+          </select>
         </label>
         <label class="constraint-notes">
           Extra notes
@@ -248,7 +282,6 @@ import {
       x-show="modalOpen"
       x-transition:enter="fadeIn"
       @click.self="modalOpen = false"
-      @open-recipe.window="openModal($event.detail)"
       style="display: none;"
     >
       <div class="modal" @click.stop>
@@ -275,13 +308,35 @@ import {
           </div>
         </div>
 
-        <div class="modal__media no-print" x-show="activeRecipe.imageUrl">
+        <div class="modal__media no-print" x-show="activeRecipe.imageUrl || previewImageLoading">
           <img :src="activeRecipe.imageUrl" :alt="activeRecipe.title" class="modal__photo" />
+          <div class="recipe-card__placeholder recipe-card__placeholder--loading" x-show="previewImageLoading && !activeRecipe.imageUrl">
+            Generating finished dish photo...
+          </div>
+        </div>
+
+        <div class="modal__servings-row no-print">
+          <label class="modal__servings">
+            Servings
+            <input
+              type="number"
+              class="modal__servings-input"
+              min="1"
+              max="48"
+              x-model.number="modalTargetServings"
+            />
+          </label>
+          <p class="modal__servings-hint" x-show="recipeBaseServings() !== modalTargetServings">
+            Amounts scaled from
+            <span x-text="recipeBaseServings()"></span>
+            to
+            <span x-text="modalTargetServings"></span>
+          </p>
         </div>
 
         <h3 class="modal__section-title">Ingredients</h3>
         <div class="modal__ingredients">
-          <template x-for="ing in activeRecipe.ingredients" :key="ing">
+          <template x-for="ing in scaledIngredientLines()" :key="ing">
             <span class="modal__ingredient" x-text="ing"></span>
           </template>
         </div>
@@ -299,8 +354,10 @@ import {
 
         <div class="modal__toolbar no-print">
           <button type="button" class="btn btn--ghost" @click="window.print()">Print</button>
+          <button type="button" class="btn btn--ghost" @click="downloadActiveRecipeHtml()">Download HTML</button>
           <button type="button" class="btn btn--ghost" @click="copyIngredientList()">Copy ingredients</button>
           <button type="button" class="btn btn--ghost" @click="copyShopList()" title="Lines that may not match your kitchen list (heuristic)">Copy shop hints</button>
+          <button type="button" class="btn btn--ghost" @click="copyMergedShopList()" title="Combine shop hints from every bookmark using your pantry list">Merged shop (bookmarks)</button>
           <button
             type="button"
             class="btn btn--ghost"
@@ -373,6 +430,92 @@ import {
 
   <!-- ─── Alpine.js App Logic ────────────────── -->
   <script>
+    window.recipeImageCacheKey = 'recipesuggest_recipe_images';
+    window.recipeImageInflight = new Map();
+    window.encodeRecipeData = function (recipe) {
+      return btoa(unescape(encodeURIComponent(JSON.stringify(recipe))));
+    };
+    window.readRecipeImageCache = function () {
+      try {
+        return JSON.parse(localStorage.getItem(window.recipeImageCacheKey) || '{}');
+      } catch (_e) {
+        return {};
+      }
+    };
+    window.writeRecipeImageCache = function (cache) {
+      localStorage.setItem(window.recipeImageCacheKey, JSON.stringify(cache));
+    };
+    window.applyRecipeImageToCard = function (card, recipe, imageUrl) {
+      if (!card || !recipe || !imageUrl) return;
+      const nextRecipe = { ...recipe, imageUrl };
+      card.dataset.recipe = window.encodeRecipeData(nextRecipe);
+      const bookmarkBtn = card.querySelector('.recipe-card__bookmark');
+      if (bookmarkBtn) {
+        bookmarkBtn.dataset.recipe = window.encodeRecipeData(nextRecipe);
+      }
+      const img = card.querySelector('.recipe-card__image');
+      const placeholder = card.querySelector('.recipe-card__placeholder');
+      if (img) img.src = imageUrl;
+      if (placeholder) {
+        placeholder.textContent = 'Finished dish photo';
+        placeholder.classList.remove('recipe-card__placeholder--loading');
+      }
+      card.classList.add('recipe-card--has-image');
+      document.dispatchEvent(
+        new CustomEvent('recipe-image-ready', {
+          detail: { id: nextRecipe.id, imageUrl },
+        }),
+      );
+    };
+    window.ensureRecipeImage = async function (recipe) {
+      if (!recipe || !recipe.id) throw new Error('Missing recipe for image');
+      if (recipe.imageUrl) return recipe.imageUrl;
+      const cache = window.readRecipeImageCache();
+      if (cache[recipe.id]) return cache[recipe.id];
+      if (window.recipeImageInflight.has(recipe.id)) {
+        return window.recipeImageInflight.get(recipe.id);
+      }
+      const request = fetch('/api/bookmark-image', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(recipe),
+      })
+        .then(async (res) => {
+          let data = {};
+          try {
+            data = await res.json();
+          } catch {
+            if (!res.ok) throw new Error('Network error loading photo');
+          }
+          if (!res.ok) {
+            throw new Error(
+              typeof data.error === 'string' ? data.error : 'Image request failed',
+            );
+          }
+          const nextCache = window.readRecipeImageCache();
+          nextCache[recipe.id] = data.imageUrl;
+          window.writeRecipeImageCache(nextCache);
+          return data.imageUrl;
+        })
+        .finally(() => {
+          window.recipeImageInflight.delete(recipe.id);
+        });
+      window.recipeImageInflight.set(recipe.id, request);
+      return request;
+    };
+
+    window.dispatchOpenRecipe = function (el) {
+      const raw = el && el.dataset ? el.dataset.recipe : null;
+      if (!raw) return;
+      const detail = JSON.parse(decodeURIComponent(escape(atob(raw))));
+      const app = document.querySelector('[data-testid="recipe-app"]');
+      const target = app || document.documentElement;
+      target.dispatchEvent(
+        new CustomEvent('open-recipe', { detail, bubbles: true }),
+      );
+    };
+
     // ── Global bookmark handler (used by HTMX-rendered cards) ────────
     window.handleBookmark = function(btn) {
       const recipe = JSON.parse(decodeURIComponent(escape(atob(btn.dataset.recipe))));
@@ -414,9 +557,9 @@ import {
       });
     });
 
-    document.addEventListener('alpine:init', () => {
+    const initBookmarksStore = () => {
       // Bookmark store persisted in localStorage
-      Alpine.store('bookmarks', {
+      window.Alpine.store('bookmarks', {
         list: JSON.parse(localStorage.getItem('recipesuggest_bookmarks') || '[]'),
 
         has(id) {
@@ -435,10 +578,10 @@ import {
           }
         }
       });
-    });
+    };
 
-    document.addEventListener('alpine:init', () => {
-      Alpine.data('recipeApp', () => ({
+    const initRecipeApp = () => {
+      window.Alpine.data('recipeApp', () => ({
         ingredients: [],
         currentInput: '',
         history: [],
@@ -452,7 +595,10 @@ import {
         cDairyFree: false,
         cNutFree: false,
         cMaxMins: '',
+        cServings: '4',
+        cUnitSystem: '',
         cNotes: '',
+        modalTargetServings: 4,
         copyStatus: '',
         _copyStatusTimer: null,
         previewImageLoading: false,
@@ -467,6 +613,7 @@ import {
           difficulty: 'easy',
           ingredients: [],
           instructions: [],
+          servings: 4,
           imageUrl: undefined,
         },
 
@@ -543,12 +690,78 @@ import {
 
         openModal(recipe) {
           this.activeRecipe = recipe;
+          const base = this.recipeBaseServings();
+          this.modalTargetServings = base;
           this.modalOpen = true;
           this.cookModeOpen = false;
           this.cookStepIndex = 0;
           this.copyStatus = '';
           this.stopCookTimer();
           this.cookTimerDone = false;
+          if (!this.activeRecipe.imageUrl) {
+            this.loadPreviewImage(false);
+          }
+        },
+
+        pantryTokenSet() {
+          const set = new Set();
+          for (const p of this.ingredients || []) {
+            for (const t of String(p).toLowerCase().split(/[\s,;\/]+/)) {
+              if (t.length >= 2) set.add(t);
+            }
+          }
+          return set;
+        },
+
+        lineMatchesPantryTokens(line, pantryTokens) {
+          const words = String(line)
+            .toLowerCase()
+            .split(/[\s,;\/]+/)
+            .filter(Boolean);
+          for (const w of words) {
+            if (pantryTokens.has(w)) return true;
+            for (const t of pantryTokens) {
+              if (
+                w.length >= 2 &&
+                t.length >= 2 &&
+                (w.includes(t) || t.includes(w))
+              )
+                return true;
+            }
+          }
+          return false;
+        },
+
+        recipeBaseServings() {
+          const n = this.activeRecipe.servings;
+          const v = parseInt(String(n), 10);
+          return Number.isFinite(v) && v > 0 ? v : 4;
+        },
+
+        scaleIngredientAmounts(lines, from, to) {
+          if (!from || from <= 0 || from === to) return [...lines];
+          const factor = to / from;
+          return lines.map((line) =>
+            String(line).replace(/\b(\d+\.\d+|\d+)\b/g, (match) => {
+              const num = parseFloat(match);
+              if (!Number.isFinite(num)) return match;
+              const x = num * factor;
+              const r = Math.round(x * 100) / 100;
+              let s = String(r);
+              if (s.endsWith(".00")) s = s.slice(0, -3);
+              else if (/^\d+\.\d0$/.test(s)) s = s.slice(0, -1);
+              return s;
+            }),
+          );
+        },
+
+        scaledIngredientLines() {
+          const lines = this.activeRecipe.ingredients || [];
+          const from = this.recipeBaseServings();
+          let to = Number(this.modalTargetServings);
+          if (!Number.isFinite(to) || to < 1) to = from;
+          if (to > 48) to = 48;
+          return this.scaleIngredientAmounts(lines, from, to);
         },
 
         showCopyStatus(msg) {
@@ -560,7 +773,7 @@ import {
         },
 
         async copyIngredientList() {
-          const lines = this.activeRecipe.ingredients || [];
+          const lines = this.scaledIngredientLines();
           if (!lines.length) return;
           try {
             await navigator.clipboard.writeText(lines.join('\n'));
@@ -571,17 +784,73 @@ import {
         },
 
         linesYouMayNeedToBuy() {
-          const pantry = (this.ingredients || [])
-            .map((i) => String(i).toLowerCase().trim())
-            .filter((p) => p.length >= 2);
-          const rows = this.activeRecipe.ingredients || [];
+          const pantry = this.pantryTokenSet();
+          const rows = this.scaledIngredientLines();
           const out = [];
           for (const line of rows) {
-            const l = String(line).toLowerCase();
-            const hit = pantry.some((p) => l.includes(p));
-            if (!hit) out.push(line);
+            if (!this.lineMatchesPantryTokens(line, pantry)) out.push(line);
           }
           return out.length ? out : [...rows];
+        },
+
+        mergedShopHintsFromBookmarks() {
+          const pantry = this.pantryTokenSet();
+          const list = window.Alpine.store('bookmarks').list || [];
+          const seen = new Set();
+          const out = [];
+          for (const recipe of list) {
+            for (const line of recipe.ingredients || []) {
+              if (this.lineMatchesPantryTokens(line, pantry)) continue;
+              const key = String(line).trim().toLowerCase();
+              if (!key || seen.has(key)) continue;
+              seen.add(key);
+              out.push(line);
+            }
+          }
+          return out;
+        },
+
+        async copyMergedShopList() {
+          const lines = this.mergedShopHintsFromBookmarks();
+          if (!lines.length) {
+            this.showCopyStatus('No merged lines (or all matched pantry)');
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(lines.join('\n'));
+            this.showCopyStatus('Merged shop list copied');
+          } catch {
+            this.showCopyStatus('Could not copy');
+          }
+        },
+
+        async downloadActiveRecipeHtml() {
+          try {
+            const res = await fetch('/api/export-recipe-html', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                recipe: {
+                  ...this.activeRecipe,
+                  ingredients: this.scaledIngredientLines(),
+                  servings: Number(this.modalTargetServings) || this.recipeBaseServings(),
+                },
+              }),
+            });
+            if (!res.ok) throw new Error('Export failed');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const raw = (this.activeRecipe.title || 'recipe').replace(/[^\w\-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+            a.download = (raw || 'recipe') + '.html';
+            a.click();
+            URL.revokeObjectURL(url);
+            this.showCopyStatus('Recipe downloaded');
+          } catch {
+            this.showCopyStatus('Download failed');
+          }
         },
 
         async copyShopList() {
@@ -595,29 +864,22 @@ import {
           }
         },
 
-        async loadPreviewImage() {
+        async loadPreviewImage(announce = true) {
           if (this.previewImageLoading || this.activeRecipe.imageUrl) return;
           this.previewImageLoading = true;
           try {
-            const res = await fetch('/api/bookmark-image', {
-              method: 'POST',
-              credentials: 'same-origin',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(this.activeRecipe),
-            });
-            const data = await res.json();
-            if (!res.ok) {
-              throw new Error(data.error || 'Image request failed');
-            }
+            const imageUrl = await window.ensureRecipeImage(this.activeRecipe);
             this.activeRecipe = {
               ...this.activeRecipe,
-              imageUrl: data.imageUrl,
+              imageUrl,
             };
-            this.showCopyStatus('Photo added');
+            if (announce) this.showCopyStatus('Photo added');
           } catch (e) {
-            this.showCopyStatus(
-              e instanceof Error ? e.message : 'Photo failed',
-            );
+            if (announce) {
+              this.showCopyStatus(
+                e instanceof Error ? e.message : 'Photo failed',
+              );
+            }
           } finally {
             this.previewImageLoading = false;
           }
@@ -704,6 +966,8 @@ import {
 
         constraintsPayload() {
           const max = parseInt(String(this.cMaxMins), 10);
+          const serv = parseInt(String(this.cServings), 10);
+          const unit = String(this.cUnitSystem || '').trim();
           return JSON.stringify({
             vegetarian: !!this.cVegetarian || !!this.cVegan,
             vegan: !!this.cVegan,
@@ -712,20 +976,86 @@ import {
             nutFree: !!this.cNutFree,
             maxTimeMins:
               Number.isFinite(max) && max > 0 ? max : undefined,
+            servings:
+              Number.isFinite(serv) && serv >= 1 && serv <= 24 ? serv : undefined,
+            unitSystem:
+              unit === 'us' || unit === 'metric' ? unit : undefined,
             notes: String(this.cNotes || '').trim() || undefined,
           });
+        },
+
+        suggestRetryMarkup() {
+          return `<div class="error-message"><p>Something went wrong reaching the server. Check your connection and try again.</p><button type="button" class="btn btn--primary" id="suggest-retry">Try again</button></div>`;
+        },
+
+        bindSuggestRetryOnce() {
+          document.getElementById('suggest-retry')?.addEventListener(
+            'click',
+            () => document.getElementById('suggest-form')?.requestSubmit(),
+            { once: true },
+          );
         },
 
         init() {
           this.history = JSON.parse(localStorage.getItem('recipesuggest_recent_searches') || '[]');
 
-          // Reset loading state when HTMX finishes
-          document.body.addEventListener('htmx:afterRequest', () => {
+          document.addEventListener('recipe-image-ready', (evt) => {
+            const detail = evt.detail || {};
+            if (detail.id && this.activeRecipe.id === detail.id && detail.imageUrl) {
+              this.activeRecipe = {
+                ...this.activeRecipe,
+                imageUrl: detail.imageUrl,
+              };
+            }
+          });
+
+          document.body.addEventListener('htmx:afterRequest', (evt) => {
             this.loading = false;
+            const xhr = evt.detail.xhr;
+            if (!xhr || !xhr.responseURL || xhr.responseURL.indexOf('/api/suggest') === -1) {
+              return;
+            }
+            if (!evt.detail.successful && xhr.status !== 429) {
+              const target = document.getElementById('recipe-results');
+              if (target) {
+                target.innerHTML = this.suggestRetryMarkup();
+                this.bindSuggestRetryOnce();
+              }
+            }
+          });
+
+          document.body.addEventListener('htmx:sendError', () => {
+            this.loading = false;
+            const target = document.getElementById('recipe-results');
+            if (target) {
+              target.innerHTML = this.suggestRetryMarkup();
+              this.bindSuggestRetryOnce();
+            }
           });
         }
       }));
-    });
+    };
+
+    let alpineBooted = false;
+    const bootAlpineModules = () => {
+      if (alpineBooted || !window.Alpine) return;
+      alpineBooted = true;
+      initBookmarksStore();
+      initRecipeApp();
+      const app = document.querySelector('[data-testid="recipe-app"]');
+      if (app) window.Alpine.initTree(app);
+    };
+
+    const waitForAlpine = () => {
+      if (window.Alpine) {
+        bootAlpineModules();
+        return;
+      }
+      window.setTimeout(waitForAlpine, 25);
+    };
+
+    document.addEventListener('alpine:init', bootAlpineModules, { once: true });
+    waitForAlpine();
   </script>
   <script is:inline>
     document.addEventListener("DOMContentLoaded", function () {

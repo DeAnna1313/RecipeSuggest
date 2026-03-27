@@ -4,10 +4,7 @@ import {
   type Recipe,
   type SuggestConstraints,
 } from "../../lib/recipes";
-import {
-  checkRateLimit,
-  clientKeyFromRequest,
-} from "../../lib/rate-limit";
+import { checkRateLimitHybrid } from "../../lib/rate-limit-hybrid";
 
 function parseConstraints(raw: string | undefined): SuggestConstraints {
   if (!raw?.trim()) return {};
@@ -41,8 +38,10 @@ try {
   } else {
     const auth = await Astro.locals.auth();
     const uid = auth.userId ?? null;
-    const rl = checkRateLimit(
-      clientKeyFromRequest(Astro.request, uid),
+    const rl = await checkRateLimitHybrid(
+      Astro.request,
+      uid,
+      "suggest",
       { maxAnon: 24, maxAuth: 96, windowMs: 15 * 60 * 1000 },
       !!uid,
     );
@@ -60,8 +59,9 @@ try {
     );
     recipes = await suggestRecipes(ingredients, constraints);
   }
-} catch (e: any) {
-  error = e.message ?? "Something went wrong. Please try again.";
+} catch (e: unknown) {
+  error =
+    e instanceof Error ? e.message : "Something went wrong. Please try again.";
 }
 
 function difficultyClass(d: string) {
@@ -87,9 +87,19 @@ function encodeRecipe(recipe: Recipe): string {
           role="button"
           tabindex="0"
           data-recipe={encodeRecipe(recipe)}
-          onclick="window.dispatchEvent(new CustomEvent('open-recipe', { detail: JSON.parse(decodeURIComponent(escape(atob(this.dataset.recipe)))) }))"
-          onkeydown="if(event.key==='Enter') window.dispatchEvent(new CustomEvent('open-recipe', { detail: JSON.parse(decodeURIComponent(escape(atob(this.dataset.recipe)))) }))"
+          onclick="window.dispatchOpenRecipe(this)"
+          onkeydown="if(event.key==='Enter') window.dispatchOpenRecipe(this)"
         >
+          <div class="recipe-card__media">
+            <img
+              class="recipe-card__image"
+              alt={recipe.title}
+              loading="lazy"
+            />
+            <div class="recipe-card__placeholder recipe-card__placeholder--loading">
+              Generating finished dish photo...
+            </div>
+          </div>
           <div class="recipe-card__header">
             <h3 class="recipe-card__title">{recipe.title}</h3>
             <button
@@ -126,6 +136,25 @@ function encodeRecipe(recipe: Recipe): string {
     if (isBookmarked) {
       btn.classList.add("is-bookmarked");
       btn.querySelector("span")!.textContent = "★";
+    }
+  });
+
+  document.querySelectorAll(".recipe-card[data-recipe]").forEach(async (card) => {
+    const el = card as HTMLElement;
+    const raw = el.dataset.recipe;
+    if (!raw || typeof window.ensureRecipeImage !== "function") return;
+    try {
+      const recipe = JSON.parse(decodeURIComponent(escape(atob(raw))));
+      const imageUrl = await window.ensureRecipeImage(recipe);
+      if (typeof window.applyRecipeImageToCard === "function") {
+        window.applyRecipeImageToCard(el, recipe, imageUrl);
+      }
+    } catch (_e) {
+      const placeholder = el.querySelector(".recipe-card__placeholder");
+      if (placeholder) {
+        placeholder.textContent = "Photo unavailable";
+        placeholder.classList.remove("recipe-card__placeholder--loading");
+      }
     }
   });
 </script>
