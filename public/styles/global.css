@@ -1226,6 +1226,20 @@ body::before {
   min-height: 1.25rem;
 }
 
+.modal__media {
+  margin: var(--space-md) 0 var(--space-lg);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.modal__photo {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+}
+
 .cook-mode__timer {
   display: flex;
   flex-wrap: wrap;

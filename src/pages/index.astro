@@ -275,6 +275,10 @@ import {
           </div>
         </div>
 
+        <div class="modal__media no-print" x-show="activeRecipe.imageUrl">
+          <img :src="activeRecipe.imageUrl" :alt="activeRecipe.title" class="modal__photo" />
+        </div>
+
         <h3 class="modal__section-title">Ingredients</h3>
         <div class="modal__ingredients">
           <template x-for="ing in activeRecipe.ingredients" :key="ing">
@@ -297,6 +301,16 @@ import {
           <button type="button" class="btn btn--ghost" @click="window.print()">Print</button>
           <button type="button" class="btn btn--ghost" @click="copyIngredientList()">Copy ingredients</button>
           <button type="button" class="btn btn--ghost" @click="copyShopList()" title="Lines that may not match your kitchen list (heuristic)">Copy shop hints</button>
+          <button
+            type="button"
+            class="btn btn--ghost"
+            x-show="!activeRecipe.imageUrl"
+            :disabled="previewImageLoading"
+            @click="loadPreviewImage()"
+          >
+            <span x-show="!previewImageLoading">AI dish photo</span>
+            <span x-show="previewImageLoading">Loading…</span>
+          </button>
           <button type="button" class="btn btn--primary" @click="openCookMode()">Cook mode</button>
         </div>
       </div>
@@ -441,6 +455,7 @@ import {
         cNotes: '',
         copyStatus: '',
         _copyStatusTimer: null,
+        previewImageLoading: false,
         cookTimerMins: 5,
         cookTimerRemaining: null,
         cookTimerDone: false,
@@ -452,6 +467,7 @@ import {
           difficulty: 'easy',
           ingredients: [],
           instructions: [],
+          imageUrl: undefined,
         },
 
         addIngredient() {
@@ -576,6 +592,34 @@ import {
             this.showCopyStatus('Shopping hints copied');
           } catch {
             this.showCopyStatus('Could not copy');
+          }
+        },
+
+        async loadPreviewImage() {
+          if (this.previewImageLoading || this.activeRecipe.imageUrl) return;
+          this.previewImageLoading = true;
+          try {
+            const res = await fetch('/api/bookmark-image', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.activeRecipe),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+              throw new Error(data.error || 'Image request failed');
+            }
+            this.activeRecipe = {
+              ...this.activeRecipe,
+              imageUrl: data.imageUrl,
+            };
+            this.showCopyStatus('Photo added');
+          } catch (e) {
+            this.showCopyStatus(
+              e instanceof Error ? e.message : 'Photo failed',
+            );
+          } finally {
+            this.previewImageLoading = false;
           }
         },
 
