@@ -104,19 +104,17 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
 export async function generateRecipeImage(recipe: Recipe): Promise<string> {
   const client = getOpenAIClient();
   const prompt = [
-    "Create a realistic editorial food photo for this recipe.",
-    `Recipe title: ${recipe.title}.`,
-    `Description: ${recipe.description}`,
-    `Key ingredients: ${recipe.ingredients.join(", ")}.`,
-    "Show the plated finished dish only.",
-    "Warm natural lighting, appetizing styling, no text, no watermark, no labels.",
+    "Simple realistic photo of the finished plated dish only.",
+    recipe.title + ".",
+    recipe.description.slice(0, 200),
+    "Natural light, no text or watermark.",
   ].join(" ");
 
   const response = await client.images.generate({
     model: "gpt-image-1",
     prompt,
     size: "1024x1024",
-    quality: "medium",
+    quality: "low",
   });
 
   const imageBase64 = response.data?.[0]?.b64_json;
