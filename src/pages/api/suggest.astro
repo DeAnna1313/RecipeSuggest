@@ -1,5 +1,20 @@
 ---
-import { suggestRecipes, type Recipe } from "../../lib/recipes";
+import {
+  suggestRecipes,
+  type Recipe,
+  type SuggestConstraints,
+} from "../../lib/recipes";
+
+function parseConstraints(raw: string | undefined): SuggestConstraints {
+  if (!raw?.trim()) return {};
+  try {
+    const v = JSON.parse(raw) as unknown;
+    if (!v || typeof v !== "object" || Array.isArray(v)) return {};
+    return v as SuggestConstraints;
+  } catch {
+    return {};
+  }
+}
 
 // Only POST allowed
 if (Astro.request.method !== "POST") {
@@ -20,7 +35,10 @@ try {
   if (ingredients.length === 0) {
     error = "Please add at least one ingredient.";
   } else {
-    recipes = await suggestRecipes(ingredients);
+    const constraints = parseConstraints(
+      formData.get("constraints")?.toString(),
+    );
+    recipes = await suggestRecipes(ingredients, constraints);
   }
 } catch (e: any) {
   error = e.message ?? "Something went wrong. Please try again.";

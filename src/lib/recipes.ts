@@ -11,6 +11,16 @@ export interface Recipe {
   imageUrl?: string;
 }
 
+export interface SuggestConstraints {
+  vegetarian?: boolean;
+  vegan?: boolean;
+  glutenFree?: boolean;
+  dairyFree?: boolean;
+  nutFree?: boolean;
+  maxTimeMins?: number;
+  notes?: string;
+}
+
 /* ── In-memory response cache ────────────────── */
 const cache = new Map<string, Recipe[]>();
 
@@ -25,16 +35,79 @@ function getOpenAIClient() {
   return new OpenAI({ apiKey });
 }
 
-function cacheKey(ingredients: string[]): string {
-  return [...ingredients]
-    .sort()
+function normalizeConstraints(
+  c: SuggestConstraints | undefined,
+): SuggestConstraints {
+  if (!c || typeof c !== "object") return {};
+  const max = Number(c.maxTimeMins);
+  return {
+    vegetarian: !!c.vegetarian,
+    vegan: !!c.vegan,
+    glutenFree: !!c.glutenFree,
+    dairyFree: !!c.dairyFree,
+    nutFree: !!c.nutFree,
+    maxTimeMins: Number.isFinite(max) && max > 0 ? Math.round(max) : undefined,
+    notes:
+      typeof c.notes === "string" && c.notes.trim() ? c.notes.trim() : undefined,
+  };
+}
+
+function cacheKey(
+  ingredients: string[],
+  constraints: SuggestConstraints,
+): string {
+  const ing = [...ingredients]
     .map((i) => i.trim().toLowerCase())
-    .join("|");
+    .filter(Boolean)
+    .sort();
+  return JSON.stringify({ ing, c: constraints });
+}
+
+function constraintsPromptBlock(c: SuggestConstraints): string {
+  const lines: string[] = [];
+  if (c.vegan) {
+    lines.push(
+      "All recipes must be fully vegan (no meat, fish, dairy, eggs, or honey).",
+    );
+  } else if (c.vegetarian) {
+    lines.push(
+      "All recipes must be vegetarian (no meat, fish, or poultry; dairy and eggs are allowed unless otherwise constrained).",
+    );
+  }
+  if (c.glutenFree) {
+    lines.push(
+      "Avoid gluten: no wheat, barley, rye, or unsafe oats; use labeled gluten-free substitutes when needed.",
+    );
+  }
+  if (c.dairyFree) {
+    lines.push(
+      "No dairy (no milk, butter, cheese, cream, yogurt); use plant-based substitutes where helpful.",
+    );
+  }
+  if (c.nutFree) {
+    lines.push(
+      "No peanuts or tree nuts; avoid nut oils and cross-contact ingredients.",
+    );
+  }
+  if (c.maxTimeMins) {
+    lines.push(
+      `Each recipe must be realistic to finish within about ${c.maxTimeMins} minutes total (prep + cook), given the constraints.`,
+    );
+  }
+  if (c.notes) {
+    lines.push(`Additional user preferences: ${c.notes}`);
+  }
+  if (lines.length === 0) return "";
+  return `\n\nStrict requirements (you must follow all):\n- ${lines.join("\n- ")}`;
 }
 
 /* ── Main function ───────────────────────────── */
-export async function suggestRecipes(ingredients: string[]): Promise<Recipe[]> {
-  const key = cacheKey(ingredients);
+export async function suggestRecipes(
+  ingredients: string[],
+  constraints: SuggestConstraints = {},
+): Promise<Recipe[]> {
+  const c = normalizeConstraints(constraints);
+  const key = cacheKey(ingredients, c);
 
   if (cache.has(key)) {
     return cache.get(key)!;
@@ -54,6 +127,8 @@ Rules for instructions (IMPORTANT):
 - Define terms briefly when needed (e.g. "dice = small cubes").
 - Assume no prior knowledge but keep language friendly, not condescending.
 
+If the user gave dietary or time constraints in their message, every recipe must satisfy them. If it is impossible with only their listed ingredients, prefer recipes that are close and note any minimal extra need in the description (still obey JSON schema).
+
 Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON must be an array of exactly 4 objects with this schema:
 
 {
@@ -66,7 +141,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
   "instructions": ["Step 1 — ...", "Step 2 — ..."]
 }`;
 
-  const userPrompt = `I have these ingredients: ${ingredients.join(", ")}`;
+  const userPrompt = `I have these ingredients: ${ingredients.join(", ")}${constraintsPromptBlock(c)}`;
 
   const response = await client.chat.completions.create({
     model: "gpt-4o-mini",

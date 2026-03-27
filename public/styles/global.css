@@ -386,6 +386,69 @@ body::before {
   color: var(--text-muted);
 }
 
+.constraint-panel {
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.constraint-panel__title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.constraint-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+.constraint-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.constraint-check input {
+  accent-color: var(--accent);
+}
+
+.constraint-mins,
+.constraint-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.constraint-mins__input,
+.constraint-notes__input {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.constraint-notes__input {
+  resize: vertical;
+  min-height: 3rem;
+}
+
 .recent-searches {
   margin-top: var(--space-lg);
   padding-top: var(--space-lg);

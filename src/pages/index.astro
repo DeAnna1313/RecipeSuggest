@@ -79,6 +79,52 @@ import {
         </template>
       </div>
 
+      <div class="constraint-panel" x-show="ingredients.length > 0">
+        <p class="constraint-panel__title">Preferences (optional)</p>
+        <div class="constraint-grid">
+          <label class="constraint-check">
+            <input type="checkbox" x-model="cVegan" @change="cVegan && (cVegetarian = true)" />
+            Vegan
+          </label>
+          <label class="constraint-check">
+            <input type="checkbox" x-model="cVegetarian" :disabled="cVegan" />
+            Vegetarian
+          </label>
+          <label class="constraint-check">
+            <input type="checkbox" x-model="cGlutenFree" />
+            Gluten-free
+          </label>
+          <label class="constraint-check">
+            <input type="checkbox" x-model="cDairyFree" />
+            Dairy-free
+          </label>
+          <label class="constraint-check">
+            <input type="checkbox" x-model="cNutFree" />
+            Nut-free
+          </label>
+        </div>
+        <label class="constraint-mins">
+          Max time (minutes)
+          <input
+            type="number"
+            class="constraint-mins__input"
+            x-model="cMaxMins"
+            min="5"
+            max="300"
+            placeholder="e.g. 45"
+          />
+        </label>
+        <label class="constraint-notes">
+          Extra notes
+          <textarea
+            class="constraint-notes__input"
+            x-model="cNotes"
+            rows="2"
+            placeholder="e.g. no cilantro, mild spice only…"
+          />
+        </label>
+      </div>
+
       <!-- Actions -->
       <div class="ingredient-panel__actions">
         <span class="ingredient-panel__count" x-show="ingredients.length > 0">
@@ -94,6 +140,7 @@ import {
           @htmx:before-request="onBeforeRequest($event)"
         >
           <input type="hidden" name="ingredients" :value="ingredients.join(',')" />
+          <input type="hidden" name="constraints" :value="constraintsPayload()" />
           <button
             class="btn btn--primary"
             type="submit"
@@ -362,6 +409,13 @@ import {
         modalOpen: false,
         cookModeOpen: false,
         cookStepIndex: 0,
+        cVegetarian: false,
+        cVegan: false,
+        cGlutenFree: false,
+        cDairyFree: false,
+        cNutFree: false,
+        cMaxMins: '',
+        cNotes: '',
         activeRecipe: {
           title: '',
           description: '',
@@ -469,6 +523,20 @@ import {
 
         prevCookStep() {
           if (this.cookStepIndex > 0) this.cookStepIndex--;
+        },
+
+        constraintsPayload() {
+          const max = parseInt(String(this.cMaxMins), 10);
+          return JSON.stringify({
+            vegetarian: !!this.cVegetarian || !!this.cVegan,
+            vegan: !!this.cVegan,
+            glutenFree: !!this.cGlutenFree,
+            dairyFree: !!this.cDairyFree,
+            nutFree: !!this.cNutFree,
+            maxTimeMins:
+              Number.isFinite(max) && max > 0 ? max : undefined,
+            notes: String(this.cNotes || '').trim() || undefined,
+          });
         },
 
         init() {
