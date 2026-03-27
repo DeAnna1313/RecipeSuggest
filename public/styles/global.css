@@ -1133,6 +1133,107 @@ body::before {
   .skeleton-grid {
     grid-template-columns: 1fr;
   }
+
+  .cook-mode__footer {
+    flex-direction: column;
+  }
+}
+
+/* ── Cook mode ────────────────────────────────── */
+.modal__cook-actions {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border);
+}
+
+.cook-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(10, 10, 14, 0.92);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: var(--space-md);
+}
+
+.cook-mode__inner {
+  width: 100%;
+  max-width: 36rem;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: min(90vh, 40rem);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.cook-mode__header {
+  position: relative;
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--border);
+}
+
+.cook-mode__close {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-md);
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cook-mode__close:hover {
+  background: var(--bg-card-hover);
+}
+
+.cook-mode__title {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  padding-right: 2.5rem;
+  color: var(--text-primary);
+}
+
+.cook-mode__progress {
+  margin-top: var(--space-sm);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.cook-mode__body {
+  flex: 1;
+  padding: var(--space-xl);
+  overflow-y: auto;
+}
+
+.cook-mode__step {
+  font-size: 1.2rem;
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+
+.cook-mode__empty {
+  color: var(--text-muted);
+}
+
+.cook-mode__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-lg);
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
 }
 
 /* ── Scrollbar ────────────────────────────────── */

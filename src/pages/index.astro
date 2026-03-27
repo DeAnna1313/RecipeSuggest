@@ -10,7 +10,7 @@ import {
 ---
 
 <Base>
-  <div class="container" x-data="recipeApp">
+  <div class="container" x-data="recipeApp" @keydown.escape.window="handleEscape()">
 
     <!-- ─── Header ─────────────────────────────── -->
     <header class="site-header">
@@ -201,7 +201,6 @@ import {
       x-show="modalOpen"
       x-transition:enter="fadeIn"
       @click.self="modalOpen = false"
-      @keydown.escape.window="modalOpen = false"
       @open-recipe.window="openModal($event.detail)"
       style="display: none;"
     >
@@ -244,6 +243,51 @@ import {
             </li>
           </template>
         </ol>
+
+        <div class="modal__cook-actions">
+          <button type="button" class="btn btn--primary" @click="openCookMode()">Cook mode</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="cook-mode"
+      x-show="cookModeOpen"
+      x-transition:enter="fadeIn"
+      style="display: none;"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="'Cook mode: ' + (activeRecipe.title || 'recipe')"
+    >
+      <div class="cook-mode__inner">
+        <header class="cook-mode__header">
+          <button type="button" class="cook-mode__close" @click="cookModeOpen = false" aria-label="Exit cook mode">×</button>
+          <p class="cook-mode__title" x-text="activeRecipe.title"></p>
+          <p class="cook-mode__progress">
+            Step <span x-text="cookStepIndex + 1"></span>
+            of
+            <span x-text="(activeRecipe.instructions && activeRecipe.instructions.length) ? activeRecipe.instructions.length : 1"></span>
+          </p>
+        </header>
+        <div class="cook-mode__body">
+          <p class="cook-mode__step" x-show="activeRecipe.instructions && activeRecipe.instructions.length" x-text="activeRecipe.instructions[cookStepIndex]"></p>
+          <p class="cook-mode__empty" x-show="!activeRecipe.instructions || activeRecipe.instructions.length === 0">No steps for this recipe.</p>
+        </div>
+        <footer class="cook-mode__footer">
+          <button type="button" class="btn btn--ghost" @click="prevCookStep()" :disabled="cookStepIndex === 0">Previous</button>
+          <button
+            type="button"
+            class="btn btn--primary"
+            x-show="activeRecipe.instructions && activeRecipe.instructions.length > 0 && cookStepIndex < activeRecipe.instructions.length - 1"
+            @click="nextCookStep()"
+          >Next</button>
+          <button
+            type="button"
+            class="btn btn--primary"
+            x-show="activeRecipe.instructions && activeRecipe.instructions.length > 0 && cookStepIndex >= activeRecipe.instructions.length - 1"
+            @click="cookModeOpen = false"
+          >Done</button>
+        </footer>
       </div>
     </div>
 
@@ -316,6 +360,8 @@ import {
         history: [],
         loading: false,
         modalOpen: false,
+        cookModeOpen: false,
+        cookStepIndex: 0,
         activeRecipe: {
           title: '',
           description: '',
@@ -399,6 +445,30 @@ import {
         openModal(recipe) {
           this.activeRecipe = recipe;
           this.modalOpen = true;
+          this.cookModeOpen = false;
+          this.cookStepIndex = 0;
+        },
+
+        handleEscape() {
+          if (this.cookModeOpen) {
+            this.cookModeOpen = false;
+            return;
+          }
+          this.modalOpen = false;
+        },
+
+        openCookMode() {
+          this.cookStepIndex = 0;
+          this.cookModeOpen = true;
+        },
+
+        nextCookStep() {
+          const n = this.activeRecipe.instructions?.length ?? 0;
+          if (this.cookStepIndex < n - 1) this.cookStepIndex++;
+        },
+
+        prevCookStep() {
+          if (this.cookStepIndex > 0) this.cookStepIndex--;
         },
 
         init() {
