@@ -13,7 +13,7 @@ import {
   <div class="container" x-data="recipeApp" @keydown.escape.window="handleEscape()">
 
     <!-- ─── Header ─────────────────────────────── -->
-    <header class="site-header">
+    <header class="site-header no-print">
       <div class="site-header__nav">
         <a href="/" class="site-header__logo">
           <span class="site-header__logo-icon">🍳</span>
@@ -48,7 +48,7 @@ import {
     </header>
 
     <!-- ─── Ingredient Input Panel ─────────────── -->
-    <section class="ingredient-panel">
+    <section class="ingredient-panel no-print">
       <label class="ingredient-panel__label" for="ingredient-input">
         What's in your kitchen?
       </label>
@@ -181,7 +181,7 @@ import {
 
     <!-- ─── Bookmarks Section ──────────────────── -->
     <section
-      class="bookmarks-section"
+      class="bookmarks-section no-print"
       x-data="{ showBookmarks: false }"
       x-show="$store.bookmarks.list.length > 0"
     >
@@ -233,7 +233,7 @@ import {
     </section>
 
     <!-- ─── Results Area ───────────────────────── -->
-    <section class="recipes-section">
+    <section class="recipes-section no-print">
       <div id="recipe-results">
         <div class="empty-state">
           <div class="empty-state__icon">🥘</div>
@@ -252,7 +252,7 @@ import {
       style="display: none;"
     >
       <div class="modal" @click.stop>
-        <button class="modal__close" @click="modalOpen = false" aria-label="Close modal">×</button>
+        <button class="modal__close no-print" @click="modalOpen = false" aria-label="Close modal">×</button>
 
         <h2 class="modal__title" x-text="activeRecipe.title"></h2>
         <p class="modal__desc" x-text="activeRecipe.description"></p>
@@ -291,14 +291,15 @@ import {
           </template>
         </ol>
 
-        <div class="modal__cook-actions">
+        <div class="modal__toolbar no-print">
+          <button type="button" class="btn btn--ghost" @click="window.print()">Print</button>
           <button type="button" class="btn btn--primary" @click="openCookMode()">Cook mode</button>
         </div>
       </div>
     </div>
 
     <div
-      class="cook-mode"
+      class="cook-mode no-print"
       x-show="cookModeOpen"
       x-transition:enter="fadeIn"
       style="display: none;"

@@ -11,7 +11,7 @@ import {
 
 <Base title="Saved Bookmarks — RecipeSuggest">
   <div class="container" x-data="bookmarksPage">
-    <header class="site-header">
+    <header class="site-header no-print">
       <div class="site-header__nav">
         <a href="/" class="site-header__logo">
           <span class="site-header__logo-icon">🍳</span>
@@ -50,17 +50,27 @@ import {
           <p class="bookmarks-page__eyebrow">Saved recipes</p>
           <h1 class="bookmarks-page__title">Bookmarks</h1>
         </div>
-        <button
-          class="btn btn--ghost"
-          type="button"
-          x-show="bookmarks.length > 0"
-          @click="clearAll()"
-        >
-          Clear all
-        </button>
+        <div class="bookmarks-page__actions no-print">
+          <button
+            class="btn btn--ghost"
+            type="button"
+            x-show="bookmarks.length > 0"
+            @click="window.print()"
+          >
+            Print all
+          </button>
+          <button
+            class="btn btn--ghost"
+            type="button"
+            x-show="bookmarks.length > 0"
+            @click="clearAll()"
+          >
+            Clear all
+          </button>
+        </div>
       </div>
 
-      <div class="bookmarks-page__status" x-show="statusMessage" x-text="statusMessage"></div>
+      <div class="bookmarks-page__status no-print" x-show="statusMessage" x-text="statusMessage"></div>
 
       <div class="bookmarks-page__grid" x-show="bookmarks.length > 0">
         <template x-for="recipe in bookmarks" :key="recipe.id">
@@ -87,7 +97,7 @@ import {
                   <p class="bookmark-card__description" x-text="recipe.description"></p>
                 </div>
                 <button
-                  class="bookmark-card__remove"
+                  class="bookmark-card__remove no-print"
                   type="button"
                   @click="removeBookmark(recipe.id)"
                   aria-label="Remove bookmark"
@@ -131,7 +141,7 @@ import {
         </template>
       </div>
 
-      <div class="empty-state" x-show="bookmarks.length === 0">
+      <div class="empty-state no-print" x-show="bookmarks.length === 0">
         <div class="empty-state__icon">🔖</div>
         <p class="empty-state__text">
           Save recipes from the main page, then come back here to see them all in one place.
