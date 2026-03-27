@@ -556,4 +556,19 @@ import {
       }));
     });
   </script>
+  <script is:inline>
+    document.addEventListener("DOMContentLoaded", function () {
+      document.body.addEventListener("htmx:beforeSwap", function (evt) {
+        var xhr = evt.detail.xhr;
+        if (
+          xhr &&
+          xhr.status >= 400 &&
+          xhr.responseURL &&
+          xhr.responseURL.indexOf("/api/suggest") !== -1
+        ) {
+          evt.detail.shouldSwap = true;
+        }
+      });
+    });
+  </script>
 </Base>

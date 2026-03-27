@@ -1,8 +1,28 @@
 ---
 import { generateRecipeImage, type Recipe } from "../../lib/recipes";
+import {
+  checkRateLimit,
+  clientKeyFromRequest,
+} from "../../lib/rate-limit";
 
 if (Astro.request.method !== "POST") {
   return new Response("Method not allowed", { status: 405 });
+}
+
+const auth = await Astro.locals.auth();
+const uid = auth.userId ?? null;
+const rl = checkRateLimit(
+  clientKeyFromRequest(Astro.request, uid) + ":img",
+  { maxAnon: 12, maxAuth: 48, windowMs: 60 * 60 * 1000 },
+  !!uid,
+);
+if (!rl.allowed) {
+  return Response.json(
+    {
+      error: `Image rate limit exceeded. Try again in ${rl.retryAfterSeconds} seconds.`,
+    },
+    { status: 429 },
+  );
 }
 
 try {
