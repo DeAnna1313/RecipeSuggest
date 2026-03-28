@@ -392,9 +392,35 @@ import {
 
         <h3 class="modal__section-title">Instructions</h3>
         <ol class="modal__steps modal__steps--compact">
-          <template x-for="step in activeRecipe.instructions" :key="step">
+          <template x-for="(step, idx) in activeRecipe.instructions" :key="idx">
             <li class="modal__step">
-              <span class="modal__step-text" x-text="step"></span>
+              <div class="modal__step-maincol">
+                <button
+                  type="button"
+                  class="modal__step-toggle"
+                  x-show="recipeStepGuidance(step)"
+                  @click="toggleModalStepGuidance(idx)"
+                  :aria-expanded="!!modalStepGuidanceOpen[idx]"
+                  aria-label="Show or hide tip for this step"
+                >
+                  <span class="modal__step-text" x-text="recipeStepText(step)"></span>
+                  <span
+                    class="modal__step-chevron"
+                    :class="{ 'modal__step-chevron--open': modalStepGuidanceOpen[idx] }"
+                    aria-hidden="true"
+                  >▼</span>
+                </button>
+                <span
+                  class="modal__step-text modal__step-text--static"
+                  x-show="!recipeStepGuidance(step)"
+                  x-text="recipeStepText(step)"
+                ></span>
+                <p
+                  class="modal__step-guidance"
+                  x-show="recipeStepGuidance(step) && modalStepGuidanceOpen[idx]"
+                  x-text="recipeStepGuidance(step)"
+                ></p>
+              </div>
             </li>
           </template>
         </ol>
@@ -448,13 +474,72 @@ import {
           <button type="button" class="cook-mode__close" @click="closeCookMode()" aria-label="Exit cook mode">×</button>
           <p class="cook-mode__title" x-text="activeRecipe.title"></p>
           <p class="cook-mode__progress">
-            Step <span x-text="cookStepIndex + 1"></span>
-            of
-            <span x-text="(activeRecipe.instructions && activeRecipe.instructions.length) ? activeRecipe.instructions.length : 1"></span>
+            <span x-text="cookModeProgressSummary()"></span>
           </p>
         </header>
-        <div class="cook-mode__body">
-          <p class="cook-mode__step" x-show="activeRecipe.instructions && activeRecipe.instructions.length" x-text="activeRecipe.instructions[cookStepIndex]"></p>
+        <div class="cook-mode__body" id="cook-mode-scroll">
+          <ol
+            class="cook-mode__steps"
+            x-show="activeRecipe.instructions && activeRecipe.instructions.length"
+            role="list"
+          >
+            <template x-for="(step, idx) in activeRecipe.instructions" :key="idx">
+              <li
+                class="cook-mode__step-row"
+                :id="'cook-step-' + idx"
+                role="listitem"
+                :class="{
+                  'is-current': cookStepIndex === idx && !cookAllStepsDone(),
+                  'is-done': cookStepsCompleted[idx]
+                }"
+                :aria-label="'Step ' + (idx + 1) + (cookStepsCompleted[idx] ? ', completed' : cookStepIndex === idx ? ', current' : ', upcoming')"
+              >
+                <div class="cook-mode__step-marker" aria-hidden="true">
+                  <span class="cook-mode__step-num" x-show="!cookStepsCompleted[idx]" x-text="idx + 1"></span>
+                  <span class="cook-mode__step-check" x-show="cookStepsCompleted[idx]">✓</span>
+                </div>
+                <div class="cook-mode__step-content">
+                  <button
+                    type="button"
+                    class="cook-mode__step-toggle"
+                    x-show="recipeStepGuidance(step)"
+                    @click="toggleCookStepGuidance(idx)"
+                    :aria-expanded="!!cookStepGuidanceOpen[idx]"
+                    aria-label="Show or hide tip for this step"
+                  >
+                    <span
+                      class="cook-mode__step-text cook-mode__step-text--in-toggle"
+                      :class="{ 'cook-mode__step-text--clamped': shouldClampCookStep(step) && !cookStepDetailOpen[idx] }"
+                      x-text="recipeStepText(step)"
+                    ></span>
+                    <span
+                      class="modal__step-chevron cook-mode__step-chevron"
+                      :class="{ 'modal__step-chevron--open': cookStepGuidanceOpen[idx] }"
+                      aria-hidden="true"
+                    >▼</span>
+                  </button>
+                  <p
+                    class="cook-mode__step-text"
+                    x-show="!recipeStepGuidance(step)"
+                    :class="{ 'cook-mode__step-text--clamped': shouldClampCookStep(step) && !cookStepDetailOpen[idx] }"
+                    x-text="recipeStepText(step)"
+                  ></p>
+                  <p
+                    class="cook-mode__step-guidance"
+                    x-show="recipeStepGuidance(step) && cookStepGuidanceOpen[idx]"
+                    x-text="recipeStepGuidance(step)"
+                  ></p>
+                  <button
+                    type="button"
+                    class="cook-mode__step-more"
+                    x-show="shouldClampCookStep(step)"
+                    @click="toggleCookStepDetail(idx)"
+                    x-text="cookStepDetailOpen[idx] ? 'Show less' : 'More detail'"
+                  ></button>
+                </div>
+              </li>
+            </template>
+          </ol>
           <p class="cook-mode__empty" x-show="!activeRecipe.instructions || activeRecipe.instructions.length === 0">No steps for this recipe.</p>
         </div>
 
@@ -474,13 +559,13 @@ import {
           <button
             type="button"
             class="btn btn--primary"
-            x-show="activeRecipe.instructions && activeRecipe.instructions.length > 0 && cookStepIndex < activeRecipe.instructions.length - 1"
+            x-show="activeRecipe.instructions && activeRecipe.instructions.length > 0 && !cookAllStepsDone()"
             @click="nextCookStep()"
           >Next</button>
           <button
             type="button"
             class="btn btn--primary"
-            x-show="activeRecipe.instructions && activeRecipe.instructions.length > 0 && cookStepIndex >= activeRecipe.instructions.length - 1"
+            x-show="activeRecipe.instructions && activeRecipe.instructions.length > 0 && cookAllStepsDone()"
             @click="closeCookMode()"
           >Done</button>
         </footer>
@@ -495,6 +580,35 @@ import {
     window.recipeImageInflight = new Map();
     window.encodeRecipeData = function (recipe) {
       return btoa(unescape(encodeURIComponent(JSON.stringify(recipe))));
+    };
+
+    /** Match server normalizeRecipeInstructions for bookmarks / legacy cards. */
+    window.normalizeRecipeInstructions = function (raw) {
+      if (!Array.isArray(raw)) return [];
+      return raw.map(function (item) {
+        if (typeof item === 'string') {
+          var t = item.trim();
+          return { text: t || 'Step', guidance: '' };
+        }
+        if (item && typeof item === 'object') {
+          var o = item;
+          var fromText =
+            typeof o.text === 'string'
+              ? o.text.trim()
+              : typeof o.step === 'string'
+                ? o.step.trim()
+                : '';
+          var text = fromText || String(o.main || '').trim() || 'Step';
+          var g =
+            typeof o.guidance === 'string'
+              ? o.guidance.trim()
+              : typeof o.tip === 'string'
+                ? o.tip.trim()
+                : '';
+          return { text: text, guidance: g };
+        }
+        return { text: String(item), guidance: '' };
+      });
     };
     window.readRecipeImageCache = function () {
       try {
@@ -730,6 +844,10 @@ import {
         cookTimerRemaining: null,
         cookTimerDone: false,
         _cookTimerId: null,
+        cookStepsCompleted: [],
+        cookStepDetailOpen: {},
+        cookStepGuidanceOpen: {},
+        modalStepGuidanceOpen: {},
         activeRecipe: {
           title: '',
           description: '',
@@ -1079,11 +1197,16 @@ import {
         },
 
         openModal(recipe) {
-          this.activeRecipe = recipe;
+          const normalized =
+            typeof window.normalizeRecipeInstructions === 'function'
+              ? window.normalizeRecipeInstructions(recipe.instructions)
+              : recipe.instructions || [];
+          this.activeRecipe = { ...recipe, instructions: normalized };
           const base = this.recipeBaseServings();
           this.modalTargetServings = base;
           this.modalOpen = true;
           this.modalMenuOpen = false;
+          this.modalStepGuidanceOpen = {};
           this.cookModeOpen = false;
           this.cookStepIndex = 0;
           this.copyStatus = '';
@@ -1394,17 +1517,94 @@ import {
         openCookMode() {
           this.stopCookTimer();
           this.cookTimerDone = false;
+          const steps = this.activeRecipe.instructions || [];
+          this.cookStepsCompleted = steps.map(() => false);
+          this.cookStepDetailOpen = {};
+          this.cookStepGuidanceOpen = {};
           this.cookStepIndex = 0;
           this.cookModeOpen = true;
         },
 
+        cookModeProgressSummary() {
+          const n = this.activeRecipe.instructions?.length ?? 0;
+          if (n === 0) return '';
+          const done = this.cookStepsCompleted.filter(Boolean).length;
+          return `Step ${this.cookStepIndex + 1} of ${n} · ${done} checked off — use Next to complete the current step`;
+        },
+
+        recipeStepText(step) {
+          if (step == null) return '';
+          if (typeof step === 'string') return step;
+          if (typeof step === 'object' && step.text != null) return String(step.text);
+          return String(step);
+        },
+
+        recipeStepGuidance(step) {
+          if (step == null || typeof step === 'string') return '';
+          if (typeof step === 'object' && typeof step.guidance === 'string') {
+            return step.guidance.trim();
+          }
+          return '';
+        },
+
+        shouldClampCookStep(step) {
+          const t = this.recipeStepText(step);
+          return t.length > 140;
+        },
+
+        toggleCookStepDetail(idx) {
+          const cur = !!this.cookStepDetailOpen[idx];
+          this.cookStepDetailOpen = { ...this.cookStepDetailOpen, [idx]: !cur };
+        },
+
+        toggleModalStepGuidance(idx) {
+          const cur = !!this.modalStepGuidanceOpen[idx];
+          this.modalStepGuidanceOpen = { ...this.modalStepGuidanceOpen, [idx]: !cur };
+        },
+
+        toggleCookStepGuidance(idx) {
+          const cur = !!this.cookStepGuidanceOpen[idx];
+          this.cookStepGuidanceOpen = { ...this.cookStepGuidanceOpen, [idx]: !cur };
+        },
+
+        cookAllStepsDone() {
+          const n = this.activeRecipe.instructions?.length ?? 0;
+          if (n === 0) return false;
+          if (!Array.isArray(this.cookStepsCompleted) || this.cookStepsCompleted.length !== n) {
+            return false;
+          }
+          return this.cookStepsCompleted.every(Boolean);
+        },
+
+        scrollCookStepIntoView() {
+          this.$nextTick(() => {
+            const el = document.getElementById('cook-step-' + this.cookStepIndex);
+            el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          });
+        },
+
         nextCookStep() {
           const n = this.activeRecipe.instructions?.length ?? 0;
-          if (this.cookStepIndex < n - 1) this.cookStepIndex++;
+          if (n === 0 || !Array.isArray(this.cookStepsCompleted)) return;
+          this.cookStepsCompleted[this.cookStepIndex] = true;
+          this.cookStepsCompleted = [...this.cookStepsCompleted];
+          if (this.cookStepIndex < n - 1) {
+            this.cookStepIndex++;
+            this.scrollCookStepIntoView();
+          } else {
+            this.scrollCookStepIntoView();
+          }
         },
 
         prevCookStep() {
-          if (this.cookStepIndex > 0) this.cookStepIndex--;
+          if (this.cookStepIndex <= 0) return;
+          this.cookStepIndex--;
+          const n = this.activeRecipe.instructions?.length ?? 0;
+          for (let j = this.cookStepIndex; j < n; j++) {
+            this.cookStepsCompleted[j] = false;
+          }
+          this.cookStepsCompleted = [...this.cookStepsCompleted];
+          this.scrollCookStepIntoView();
         },
 
         constraintsPayload() {
@@ -1447,6 +1647,15 @@ import {
             this.$watch(k, () => this.queuePersistSearchPreferences());
           });
           void this.hydrateSearchPreferences();
+
+          window.addEventListener('beforeprint', () => {
+            if (!this.modalOpen || !Array.isArray(this.activeRecipe.instructions)) return;
+            const next = { ...this.modalStepGuidanceOpen };
+            this.activeRecipe.instructions.forEach((step, i) => {
+              if (this.recipeStepGuidance(step)) next[i] = true;
+            });
+            this.modalStepGuidanceOpen = next;
+          });
 
           document.addEventListener('recipe-image-ready', (evt) => {
             const detail = evt.detail || {};

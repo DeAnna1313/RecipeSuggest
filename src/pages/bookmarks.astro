@@ -149,8 +149,18 @@ import {
               <div class="bookmark-card__section">
                 <h3 class="bookmark-card__section-title">Instructions</h3>
                 <ol class="bookmark-card__steps">
-                  <template x-for="step in recipe.instructions" :key="step">
-                    <li x-text="step"></li>
+                  <template x-for="(step, sidx) in recipe.instructions" :key="sidx">
+                    <li class="bookmark-card__step-line">
+                      <span
+                        class="bookmark-card__step-main"
+                        x-text="typeof step === 'string' ? step : (step && step.text)"
+                      ></span>
+                      <p
+                        class="bookmark-card__step-tip"
+                        x-show="step && typeof step === 'object' && step.guidance"
+                        x-text="step.guidance"
+                      ></p>
+                    </li>
                   </template>
                 </ol>
               </div>

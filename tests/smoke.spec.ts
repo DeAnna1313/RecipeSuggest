@@ -80,5 +80,5 @@ test("suggest flow, modal, and cook mode", async ({ page }) => {
   await expect(
     page.getByRole("dialog", { name: /Cook mode: Smoke Recipe/i }),
   ).toBeVisible();
-  await expect(page.locator(".cook-mode__step")).toContainText("Rinse rice");
+  await expect(page.locator(".cook-mode__step-text").first()).toContainText("Rinse rice");
 });

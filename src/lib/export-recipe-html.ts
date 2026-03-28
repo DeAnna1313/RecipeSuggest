@@ -1,6 +1,6 @@
 /** Build a minimal standalone HTML document for one recipe (open in browser or print to PDF). */
 
-import type { Recipe } from "./recipes";
+import { normalizeRecipeInstructions, type Recipe } from "./recipes";
 
 function esc(s: string): string {
   return s
@@ -14,8 +14,13 @@ export function recipeToStandaloneHtml(recipe: Recipe): string {
   const ing = (recipe.ingredients ?? [])
     .map((i) => `<li>${esc(String(i))}</li>`)
     .join("");
-  const steps = (recipe.instructions ?? [])
-    .map((s) => `<li>${esc(String(s))}</li>`)
+  const steps = normalizeRecipeInstructions(recipe.instructions)
+    .map((s) => {
+      const g = s.guidance
+        ? `<p class="step-guidance">${esc(s.guidance)}</p>`
+        : "";
+      return `<li><span class="step-main">${esc(s.text)}</span>${g}</li>`;
+    })
     .join("");
   const title = esc(recipe.title || "Recipe");
   const desc = esc(recipe.description || "");
@@ -44,6 +49,8 @@ h1{font-size:1.8rem;margin-bottom:.5rem}
 .hero figcaption{margin-top:.45rem;color:#666;font-size:.85rem}
 ul,ol{padding-left:1.25rem}
 li{margin:.35rem 0;break-inside:avoid;page-break-inside:avoid}
+.step-guidance{margin:.35rem 0 0;font-size:.9rem;color:#444}
+.step-main{display:block}
 @page{margin:0.7in}
 </style>
 </head>

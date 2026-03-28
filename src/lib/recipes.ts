@@ -1,5 +1,11 @@
 import OpenAI from "openai";
 
+/** One recipe step: main action plus optional extra guidance (tips, temps, safety). */
+export interface RecipeInstructionStep {
+  text: string;
+  guidance: string;
+}
+
 export interface Recipe {
   id: string;
   title: string;
@@ -7,10 +13,39 @@ export interface Recipe {
   cookTime: string;
   difficulty: "easy" | "medium" | "hard";
   ingredients: string[];
-  instructions: string[];
+  instructions: RecipeInstructionStep[];
   /** Portions the ingredient amounts are written for (used for scaling). */
   servings?: number;
   imageUrl?: string;
+}
+
+/** Normalize API/localStorage instructions (legacy string[] or partial objects). */
+export function normalizeRecipeInstructions(raw: unknown): RecipeInstructionStep[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    if (typeof item === "string") {
+      const text = item.trim();
+      return { text: text || "Step", guidance: "" };
+    }
+    if (item && typeof item === "object") {
+      const o = item as Record<string, unknown>;
+      const fromText =
+        typeof o.text === "string"
+          ? o.text.trim()
+          : typeof o.step === "string"
+            ? o.step.trim()
+            : "";
+      const text = fromText || String(o.main ?? "").trim() || "Step";
+      const guidanceRaw =
+        typeof o.guidance === "string"
+          ? o.guidance.trim()
+          : typeof o.tip === "string"
+            ? o.tip.trim()
+            : "";
+      return { text, guidance: guidanceRaw };
+    }
+    return { text: String(item), guidance: "" };
+  });
 }
 
 export type UnitSystem = "us" | "metric";
@@ -186,8 +221,9 @@ Rules for ingredients (IMPORTANT):
 
 Rules for instructions (IMPORTANT):
 - Use 6–14 steps per recipe. One main action per step, in strict order.
-- Be explicit: say approximate heat (e.g. medium heat), times, when to stir, what "done" looks like (color/texture), and simple safety (hot pan, oven mitts for oven).
-- Define terms briefly when needed (e.g. "dice = small cubes").
+- Every step MUST be an object with "text" and "guidance" (both strings). "text" = the primary action (what to do now, clearly and in order). "guidance" = a second line of helpful detail that does NOT repeat "text" verbatim: e.g. internal temps and how to measure them, visual/texture cues for doneness, timing if it varies by thickness, equipment tips, or one concise safety note. Every step MUST have a non-empty "guidance" with at least one concrete detail.
+- Be explicit in the pair together: approximate heat, stirring, what "done" looks like—distribute between text and guidance as needed without duplication.
+- Define terms briefly when needed (e.g. in guidance: "dice = small cubes").
 - Assume no prior knowledge but keep language friendly, not condescending.
 
 If the user gave dietary or time constraints in their message, every recipe must satisfy them. If it is impossible with only their listed ingredients, prefer recipes that are close and note any minimal extra need in the description (still obey JSON schema).
@@ -202,7 +238,12 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
   "difficulty": "easy" | "medium" | "hard",
   "servings": 4,
   "ingredients": ["each item with amount if sensible"],
-  "instructions": ["Step 1 — ...", "Step 2 — ..."]
+  "instructions": [
+    {
+      "text": "Primary step action (clear, ordered).",
+      "guidance": "Extra detail only: temps, doneness cues, timing variables, tips—do not repeat text verbatim."
+    }
+  ]
 }`;
 
   const excludePrompt = excludeRecipeIds.length
@@ -245,6 +286,9 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
       const n = Number((r as Recipe).servings);
       (r as Recipe).servings =
         Number.isFinite(n) && n > 0 ? Math.round(n) : targetServings;
+      (r as Recipe).instructions = normalizeRecipeInstructions(
+        (r as Recipe).instructions as unknown,
+      );
     }
   }
 
