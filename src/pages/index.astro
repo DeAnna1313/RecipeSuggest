@@ -95,104 +95,127 @@ import {
       </div>
 
       <div class="constraint-panel" x-show="ingredients.length > 0">
-        <p class="constraint-panel__title">Preferences (optional)</p>
-        <div class="constraint-grid">
-          <label class="constraint-check">
-            <input type="checkbox" x-model="cVegan" @change="cVegan && (cVegetarian = true)" />
-            Vegan
-          </label>
-          <label class="constraint-check">
-            <input type="checkbox" x-model="cVegetarian" :disabled="cVegan" />
-            Vegetarian
-          </label>
-          <label class="constraint-check">
-            <input type="checkbox" x-model="cGlutenFree" />
-            Gluten-free
-          </label>
-          <label class="constraint-check">
-            <input type="checkbox" x-model="cDairyFree" />
-            Dairy-free
-          </label>
-          <label class="constraint-check">
-            <input type="checkbox" x-model="cNutFree" />
-            Nut-free
-          </label>
-        </div>
-        <label class="constraint-mins">
-          Max time (minutes)
-          <input
-            type="number"
-            class="constraint-mins__input"
-            x-model="cMaxMins"
-            min="5"
-            max="300"
-            placeholder="e.g. 45"
-          />
-        </label>
-        <label class="constraint-mins">
-          Servings (for amounts)
-          <input
-            type="number"
-            class="constraint-mins__input"
-            x-model="cServings"
-            min="1"
-            max="24"
-            placeholder="4"
-          />
-        </label>
-        <label class="constraint-notes">
-          Units
-          <select class="constraint-mins__input" x-model="cUnitSystem">
-            <option value="">Default (mixed)</option>
-            <option value="us">US (cups, tbsp, oz…)</option>
-            <option value="metric">Metric (g, ml, L…)</option>
-          </select>
-        </label>
-        <div class="constraint-notes">
-          <span class="constraint-panel__title">Cooking hardware</span>
-          <div class="constraint-grid constraint-grid--appliances">
+        <button
+          type="button"
+          class="constraint-panel__toggle"
+          id="main-preferences-toggle"
+          @click="preferencesPanelOpen = !preferencesPanelOpen"
+          :aria-expanded="preferencesPanelOpen"
+          aria-controls="main-preferences-panel"
+        >
+          <span class="constraint-panel__toggle-label">Preferences (optional)</span>
+          <span
+            class="constraint-panel__chevron"
+            :class="{ 'constraint-panel__chevron--open': preferencesPanelOpen }"
+            aria-hidden="true"
+          >▼</span>
+        </button>
+        <div
+          id="main-preferences-panel"
+          class="constraint-panel__body"
+          role="region"
+          aria-labelledby="main-preferences-toggle"
+          x-show="preferencesPanelOpen"
+          x-transition
+        >
+          <div class="constraint-grid">
             <label class="constraint-check">
-              <input type="checkbox" x-model="cApplianceMicrowave" @change="onApplianceToggle('microwave')" />
-              Microwave
+              <input type="checkbox" x-model="cVegan" @change="cVegan && (cVegetarian = true)" />
+              Vegan
             </label>
             <label class="constraint-check">
-              <input type="checkbox" x-model="cApplianceStove" @change="onApplianceToggle('stove')" />
-              Stove
+              <input type="checkbox" x-model="cVegetarian" :disabled="cVegan" />
+              Vegetarian
             </label>
             <label class="constraint-check">
-              <input type="checkbox" x-model="cApplianceOven" @change="onApplianceToggle('oven')" />
-              Oven
+              <input type="checkbox" x-model="cGlutenFree" />
+              Gluten-free
             </label>
             <label class="constraint-check">
-              <input type="checkbox" x-model="cApplianceAirFryer" @change="onApplianceToggle('airFryer')" />
-              Air fryer
+              <input type="checkbox" x-model="cDairyFree" />
+              Dairy-free
             </label>
             <label class="constraint-check">
-              <input type="checkbox" x-model="cApplianceNone" @change="onApplianceToggle('none')" />
-              None
-            </label>
-            <label class="constraint-check">
-              <input type="checkbox" x-model="cApplianceOther" @change="onApplianceToggle('other')" />
-              Other
+              <input type="checkbox" x-model="cNutFree" />
+              Nut-free
             </label>
           </div>
-          <input
-            x-show="cApplianceOther"
-            type="text"
-            class="constraint-notes__input"
-            x-model="cApplianceOtherText"
-            placeholder="e.g. rice cooker, grill, hot plate"
-          />
+          <label class="constraint-mins">
+            Max time (minutes)
+            <input
+              type="number"
+              class="constraint-mins__input"
+              x-model="cMaxMins"
+              min="5"
+              max="300"
+              placeholder="e.g. 45"
+            />
+          </label>
+          <label class="constraint-mins">
+            Servings (for amounts)
+            <input
+              type="number"
+              class="constraint-mins__input"
+              x-model="cServings"
+              min="1"
+              max="24"
+              placeholder="4"
+            />
+          </label>
+          <label class="constraint-notes">
+            Units
+            <select class="constraint-mins__input" x-model="cUnitSystem">
+              <option value="">Default (mixed)</option>
+              <option value="us">US (cups, tbsp, oz…)</option>
+              <option value="metric">Metric (g, ml, L…)</option>
+            </select>
+          </label>
+          <div class="constraint-notes">
+            <span class="constraint-panel__title">Cooking hardware</span>
+            <div class="constraint-grid constraint-grid--appliances">
+              <label class="constraint-check">
+                <input type="checkbox" x-model="cApplianceMicrowave" @change="onApplianceToggle('microwave')" />
+                Microwave
+              </label>
+              <label class="constraint-check">
+                <input type="checkbox" x-model="cApplianceStove" @change="onApplianceToggle('stove')" />
+                Stove
+              </label>
+              <label class="constraint-check">
+                <input type="checkbox" x-model="cApplianceOven" @change="onApplianceToggle('oven')" />
+                Oven
+              </label>
+              <label class="constraint-check">
+                <input type="checkbox" x-model="cApplianceAirFryer" @change="onApplianceToggle('airFryer')" />
+                Air fryer
+              </label>
+              <label class="constraint-check">
+                <input type="checkbox" x-model="cApplianceNone" @change="onApplianceToggle('none')" />
+                None
+              </label>
+              <label class="constraint-check">
+                <input type="checkbox" x-model="cApplianceOther" @change="onApplianceToggle('other')" />
+                Other
+              </label>
+            </div>
+            <input
+              x-show="cApplianceOther"
+              type="text"
+              class="constraint-notes__input"
+              x-model="cApplianceOtherText"
+              placeholder="e.g. rice cooker, grill, hot plate"
+            />
+          </div>
+          <label class="constraint-notes">
+            Extra notes
+            <textarea
+              class="constraint-notes__input"
+              x-model="cNotes"
+              rows="2"
+              placeholder="e.g. no cilantro, mild spice only…"
+            />
+          </label>
         </div>
-        <label class="constraint-notes">
-          Extra notes
-          <textarea
-            class="constraint-notes__input"
-            x-model="cNotes"
-            rows="2"
-            placeholder="e.g. no cilantro, mild spice only…"
-          />
-        </label>
       </div>
 
       <!-- Actions -->
@@ -545,8 +568,15 @@ import {
 
         <div class="cook-mode__timer no-print">
           <label class="cook-timer__label">
-            Timer (minutes)
-            <input type="number" class="cook-timer__input" x-model="cookTimerMins" min="1" max="120" />
+            <span class="cook-timer__label-text">Min</span>
+            <input
+              type="number"
+              class="cook-timer__input"
+              x-model="cookTimerMins"
+              min="1"
+              max="120"
+              aria-label="Timer length in minutes"
+            />
           </label>
           <button type="button" class="btn btn--ghost" @click="startCookTimer()" :disabled="cookTimerRemaining !== null">Start</button>
           <button type="button" class="btn btn--ghost" @click="stopCookTimer()" x-show="cookTimerRemaining !== null">Stop</button>
@@ -837,6 +867,7 @@ import {
         cUnitSystem: '',
         cNotes: '',
         modalTargetServings: 4,
+        preferencesPanelOpen: false,
         copyStatus: '',
         _copyStatusTimer: null,
         previewImageLoading: false,
@@ -1529,7 +1560,7 @@ import {
           const n = this.activeRecipe.instructions?.length ?? 0;
           if (n === 0) return '';
           const done = this.cookStepsCompleted.filter(Boolean).length;
-          return `Step ${this.cookStepIndex + 1} of ${n} · ${done} checked off — use Next to complete the current step`;
+          return `${this.cookStepIndex + 1}/${n} · ${done} done`;
         },
 
         recipeStepText(step) {
