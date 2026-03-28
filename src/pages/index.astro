@@ -391,7 +391,7 @@ import {
         </div>
 
         <h3 class="modal__section-title">Instructions</h3>
-        <ol class="modal__steps">
+        <ol class="modal__steps modal__steps--compact">
           <template x-for="step in activeRecipe.instructions" :key="step">
             <li class="modal__step">
               <span class="modal__step-text" x-text="step"></span>
@@ -636,6 +636,37 @@ import {
       });
     };
 
+    const SEARCH_PREF_LOCAL_KEY = 'recipesuggest_search_prefs_v1';
+    const SEARCH_PREF_KEYS = [
+      'cVegetarian',
+      'cVegan',
+      'cGlutenFree',
+      'cDairyFree',
+      'cNutFree',
+      'cApplianceMicrowave',
+      'cApplianceStove',
+      'cApplianceOven',
+      'cApplianceAirFryer',
+      'cApplianceNone',
+      'cApplianceOther',
+      'cApplianceOtherText',
+      'cMaxMins',
+      'cServings',
+      'cUnitSystem',
+      'cNotes',
+    ];
+
+    function searchPrefsMeaningful(p) {
+      if (!p || typeof p !== 'object') return false;
+      for (let i = 0; i < SEARCH_PREF_KEYS.length; i++) {
+        const k = SEARCH_PREF_KEYS[i];
+        const v = p[k];
+        if (v === true) return true;
+        if (typeof v === 'string' && v.length > 0) return true;
+      }
+      return false;
+    }
+
     const initBookmarksStore = () => {
       // Bookmark store persisted in localStorage
       window.Alpine.store('bookmarks', {
@@ -673,6 +704,8 @@ import {
         searchCacheKey: '',
         seenRecipeIds: [],
         cookStepIndex: 0,
+        _prefsHydrating: false,
+        _persistPrefsTimer: null,
         cVegetarian: false,
         cVegan: false,
         cGlutenFree: false,
@@ -787,6 +820,131 @@ import {
             if (other) out.push(other);
           }
           return out;
+        },
+
+        collectSearchPreferences() {
+          return {
+            cVegetarian: !!this.cVegetarian,
+            cVegan: !!this.cVegan,
+            cGlutenFree: !!this.cGlutenFree,
+            cDairyFree: !!this.cDairyFree,
+            cNutFree: !!this.cNutFree,
+            cApplianceMicrowave: !!this.cApplianceMicrowave,
+            cApplianceStove: !!this.cApplianceStove,
+            cApplianceOven: !!this.cApplianceOven,
+            cApplianceAirFryer: !!this.cApplianceAirFryer,
+            cApplianceNone: !!this.cApplianceNone,
+            cApplianceOther: !!this.cApplianceOther,
+            cApplianceOtherText: String(this.cApplianceOtherText || '').slice(0, 200),
+            cMaxMins: String(this.cMaxMins || '').slice(0, 10),
+            cServings: String(this.cServings || '').slice(0, 10),
+            cUnitSystem: String(this.cUnitSystem || '').slice(0, 20),
+            cNotes: String(this.cNotes || '').slice(0, 2000),
+          };
+        },
+
+        applySearchPreferences(p) {
+          if (!p || typeof p !== 'object') return;
+          const strKeys = new Set([
+            'cApplianceOtherText',
+            'cMaxMins',
+            'cServings',
+            'cUnitSystem',
+            'cNotes',
+          ]);
+          for (let i = 0; i < SEARCH_PREF_KEYS.length; i++) {
+            const k = SEARCH_PREF_KEYS[i];
+            if (!Object.prototype.hasOwnProperty.call(p, k)) continue;
+            const v = p[k];
+            if (strKeys.has(k)) {
+              this[k] = v == null ? '' : String(v);
+            } else {
+              this[k] = !!v;
+            }
+          }
+          if (this.cApplianceNone) {
+            this.cApplianceMicrowave = false;
+            this.cApplianceStove = false;
+            this.cApplianceOven = false;
+            this.cApplianceAirFryer = false;
+            this.cApplianceOther = false;
+            this.cApplianceOtherText = '';
+          }
+          if (this.cVegan) this.cVegetarian = true;
+        },
+
+        readSearchPreferencesFromLocal() {
+          try {
+            const raw = localStorage.getItem(SEARCH_PREF_LOCAL_KEY);
+            if (!raw) return null;
+            const o = JSON.parse(raw);
+            return o && typeof o === 'object' ? o : null;
+          } catch {
+            return null;
+          }
+        },
+
+        writeSearchPreferencesToLocal() {
+          try {
+            localStorage.setItem(
+              SEARCH_PREF_LOCAL_KEY,
+              JSON.stringify(this.collectSearchPreferences()),
+            );
+          } catch {
+            /* ignore quota */
+          }
+        },
+
+        async hydrateSearchPreferences() {
+          this._prefsHydrating = true;
+          let usedServer = false;
+          let authed = false;
+          try {
+            const res = await fetch('/api/search-preferences', {
+              credentials: 'same-origin',
+            });
+            if (res.ok) {
+              authed = true;
+              const data = await res.json();
+              const p = data.preferences;
+              if (searchPrefsMeaningful(p)) {
+                this.applySearchPreferences(p);
+                usedServer = true;
+                this.writeSearchPreferencesToLocal();
+              }
+            }
+          } catch {
+            /* offline or not signed in */
+          }
+          if (!usedServer) {
+            const local = this.readSearchPreferencesFromLocal();
+            if (local && searchPrefsMeaningful(local)) {
+              this.applySearchPreferences(local);
+            }
+          }
+          this._prefsHydrating = false;
+          if (
+            authed &&
+            !usedServer &&
+            searchPrefsMeaningful(this.collectSearchPreferences()) &&
+            typeof window.queueSearchPreferencesSync === 'function'
+          ) {
+            window.queueSearchPreferencesSync(this.collectSearchPreferences());
+          }
+        },
+
+        queuePersistSearchPreferences() {
+          if (this._prefsHydrating) return;
+          if (this._persistPrefsTimer) {
+            clearTimeout(this._persistPrefsTimer);
+          }
+          this._persistPrefsTimer = setTimeout(() => {
+            this._persistPrefsTimer = null;
+            this.writeSearchPreferencesToLocal();
+            if (typeof window.queueSearchPreferencesSync === 'function') {
+              window.queueSearchPreferencesSync(this.collectSearchPreferences());
+            }
+          }, 450);
         },
 
         currentSearchCacheKey() {
@@ -1284,6 +1442,11 @@ import {
 
         init() {
           this.history = JSON.parse(localStorage.getItem('recipesuggest_recent_searches') || '[]');
+
+          SEARCH_PREF_KEYS.forEach((k) => {
+            this.$watch(k, () => this.queuePersistSearchPreferences());
+          });
+          void this.hydrateSearchPreferences();
 
           document.addEventListener('recipe-image-ready', (evt) => {
             const detail = evt.detail || {};

@@ -861,7 +861,8 @@ html[data-theme="light"] body::before {
   width: 100%;
   max-height: 85vh;
   overflow-y: auto;
-  padding: var(--space-2xl);
+  overflow-x: hidden;
+  padding: var(--space-xl) var(--space-xl) var(--space-lg);
   position: relative;
   animation: slideUp 300ms var(--ease) both;
 }
@@ -922,15 +923,15 @@ html[data-theme="light"] body::before {
 
 .modal__desc {
   color: var(--text-secondary);
-  font-size: 0.92rem;
-  margin-bottom: var(--space-lg);
-  line-height: 1.6;
+  font-size: 0.88rem;
+  margin-bottom: var(--space-md);
+  line-height: 1.5;
 }
 
 .modal__meta {
   display: flex;
   gap: var(--space-lg);
-  margin-bottom: var(--space-xl);
+  margin-bottom: var(--space-md);
 }
 
 .modal__meta-item {
@@ -942,33 +943,48 @@ html[data-theme="light"] body::before {
 }
 
 .modal__section-title {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
-  margin-bottom: var(--space-sm);
+  margin-bottom: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.modal__section-title:first-of-type,
+.modal__media + .modal__servings-row + h3.modal__section-title {
+  margin-top: 0;
 }
 
 .modal__ingredients {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-xl);
+  gap: 0.35rem;
+  margin-bottom: var(--space-md);
 }
 
 .modal__ingredient {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  padding: 0.35rem 0.75rem;
+  padding: 0.25rem 0.55rem;
   border-radius: var(--radius-full);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: var(--text-secondary);
 }
 
 .modal__steps {
   list-style: none;
   counter-reset: step;
+}
+
+.modal__steps--compact .modal__step {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr;
+  gap: 0.35rem 0.5rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
 }
 
 .modal__step {
@@ -998,11 +1014,24 @@ html[data-theme="light"] body::before {
   justify-content: center;
 }
 
+.modal__steps--compact .modal__step::before {
+  width: 1.35rem;
+  height: 1.35rem;
+  font-size: 0.68rem;
+  margin-top: 0.12rem;
+}
+
 .modal__step-text {
   font-size: 0.9rem;
   color: var(--text-secondary);
   line-height: 1.6;
   padding-top: 0.3rem;
+}
+
+.modal__steps--compact .modal__step-text {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  padding-top: 0;
 }
 
 /* ── Loading Skeleton ─────────────────────────── */
@@ -1386,20 +1415,35 @@ html[data-theme="light"] body::before {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-md);
-  margin-top: var(--space-lg);
-  padding-top: var(--space-md);
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
   border-top: 1px solid var(--border);
-}
-
-.modal__menu {
   position: relative;
+  z-index: 2;
 }
 
-.modal__menu-list {
+/* Static so the dropdown’s containing block is .modal__toolbar (full width). Avoids right-aligned
+   menu growing left from a narrow button and leaving the viewport. */
+.modal__menu {
+  position: static;
+}
+
+/* Open above the toolbar row; align start edge with the modal content so the panel opens into the
+   modal (LTR) instead of off the left side of the screen. */
+.modal .modal__menu-list {
   position: absolute;
-  top: calc(100% + var(--space-xs));
-  right: 0;
-  min-width: 14rem;
+  top: auto;
+  bottom: calc(100% + var(--space-xs));
+  left: 0;
+  right: auto;
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+  min-width: min(14rem, 100%);
+  max-width: min(18rem, calc(100vw - 1.5rem));
+  width: max-content;
+  max-height: min(50vh, 18rem);
+  overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
   gap: 0.35rem;
   padding: var(--space-sm);
@@ -1407,7 +1451,7 @@ html[data-theme="light"] body::before {
   border: 1px solid var(--border);
   background: var(--bg-card);
   box-shadow: var(--shadow-lg);
-  z-index: 10;
+  z-index: 30;
 }
 
 .modal__menu-item {
@@ -1440,7 +1484,7 @@ html[data-theme="light"] body::before {
 }
 
 .modal__media {
-  margin: var(--space-md) 0 var(--space-lg);
+  margin: var(--space-sm) 0 var(--space-md);
   border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--border);
@@ -1449,7 +1493,7 @@ html[data-theme="light"] body::before {
 .modal__photo {
   display: block;
   width: 100%;
-  max-height: 220px;
+  max-height: 180px;
   object-fit: cover;
 }
 

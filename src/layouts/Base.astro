@@ -68,6 +68,20 @@ const { title = 'RecipeSuggest — AI Recipe Finder' } = Astro.props;
             } catch (_e) {}
           }, 900);
         };
+        var tPrefs;
+        window.queueSearchPreferencesSync = function (preferences) {
+          clearTimeout(tPrefs);
+          tPrefs = setTimeout(async function () {
+            try {
+              await fetch("/api/search-preferences", {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ preferences: preferences || {} }),
+              });
+            } catch (_e) {}
+          }, 900);
+        };
       })();
     </script>
     <slot />

@@ -171,6 +171,15 @@ export async function suggestRecipes(
 
   const systemPrompt = `You are a careful cooking coach for beginners (including teenagers with little kitchen experience). The user lists ingredients they already have. Suggest exactly 4 recipes that work well with those ingredients.
 
+Accuracy and safety (NON-NEGOTIABLE):
+- Base cooking methods, times, temperatures, and food-safety steps on standard home-kitchen practice and widely published food-safety guidance (e.g. USDA/FDA for the US). Do not invent "shortcuts" that skip safe handling of raw animal products.
+- Do not present guesses as facts. If a time or temperature varies by thickness or equipment, say so and tell the cook what to verify (e.g. internal temperature with a thermometer).
+- For raw poultry (chicken, turkey, duck, etc.): instructions MUST state that the cook must heat the poultry to a safe internal temperature of 165°F (74°C) measured with a food thermometer in the thickest part (no relying on "until the soup boils" or color alone as proof of safety). For ground poultry, the same 165°F (74°C) minimum applies.
+- If a recipe uses chicken or other poultry that is NOT cooked from raw (e.g. rotisserie, leftover roasted, canned, or par-cooked product), state that explicitly in BOTH the ingredients list AND the instructions (e.g. "2 cups cooked shredded chicken breast (from rotisserie or leftovers)"). Never imply raw poultry is safe because a liquid was brought to a boil unless you also include the internal-temp rule for any raw pieces.
+- Whenever poultry or meat appears, name it precisely in ingredients: species, cut, and form (e.g. "1 lb boneless skinless chicken thighs, raw" vs "2 cups diced cooked chicken breast"). Same for other meats (pork chops, ground beef, etc.)—raw vs precooked and cut/grind.
+- For other high-risk foods (ground meats, eggs in sauces, leftovers), follow conventional safe temperatures and handling; state doneness by internal temperature where it matters, not only by time.
+- Briefly note cross-contamination basics when raw poultry/meat is used (use a clean board/utensils after cooking, wash hands)—one short phrase in a relevant step is enough.
+
 Rules for ingredients (IMPORTANT):
 - The "ingredients" array must list EVERYTHING used in the dish, including common pantry items if they appear in the recipe: e.g. butter, salt, black pepper, olive oil or vegetable oil, water, sugar, flour, garlic, lemon juice, basic spices, etc. Use clear amounts where helpful (e.g. "2 tbsp butter", "salt and black pepper to taste").
 - Do not hide staples—someone should read the list and know what to gather before cooking, even if they already have it at home.
@@ -207,7 +216,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    temperature: 0.7,
+    temperature: 0.55,
     max_tokens: 5000,
   });
 
@@ -243,20 +252,39 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
   return recipes;
 }
 
+function buildRecipeImagePrompt(recipe: Recipe): string {
+  const title = (recipe.title ?? "").trim() || "the dish";
+  const desc = (recipe.description ?? "").trim().slice(0, 320);
+  const ingredients = (recipe.ingredients ?? [])
+    .map((i) => String(i).trim())
+    .filter(Boolean)
+    .slice(0, 16)
+    .join("; ");
+
+  const parts = [
+    "Photorealistic editorial food photograph of ONE finished plated dish.",
+    `The dish must unmistakably be: "${title}".`,
+    desc ? `How it should look (flavor, style, texture cues): ${desc}` : "",
+    ingredients
+      ? `Plated food should clearly reflect these ingredients (cooked and combined, not a separate ingredient flat-lay): ${ingredients}`
+      : "",
+    "Must match this specific recipe, not a generic unrelated meal.",
+    "Single plate or shallow bowl; 45° or three-quarter angle; shallow depth of field; appetizing natural light.",
+    "No people, hands, faces, packaging, raw shopping piles, or multiple unrelated dishes.",
+    "No text, letters, numbers, watermarks, or logos anywhere in the image.",
+  ];
+  return parts.filter(Boolean).join(" ");
+}
+
 export async function generateRecipeImage(recipe: Recipe): Promise<string> {
   const client = getOpenAIClient();
-  const prompt = [
-    "Simple realistic photo of the finished plated dish only.",
-    recipe.title + ".",
-    recipe.description.slice(0, 200),
-    "Natural light, no text or watermark.",
-  ].join(" ");
+  const prompt = buildRecipeImagePrompt(recipe);
 
   const response = await client.images.generate({
     model: "gpt-image-1",
     prompt,
     size: "1024x1024",
-    quality: "low",
+    quality: "medium",
   });
 
   const imageBase64 = response.data?.[0]?.b64_json;
