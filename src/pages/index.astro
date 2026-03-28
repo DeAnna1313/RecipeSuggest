@@ -567,21 +567,83 @@ import {
         </div>
 
         <div class="cook-mode__timer no-print">
-          <label class="cook-timer__label">
-            <span class="cook-timer__label-text">Min</span>
-            <input
-              type="number"
-              class="cook-timer__input"
-              x-model="cookTimerMins"
-              min="1"
-              max="120"
-              aria-label="Timer length in minutes"
-            />
-          </label>
-          <button type="button" class="btn btn--ghost" @click="startCookTimer()" :disabled="cookTimerRemaining !== null">Start</button>
-          <button type="button" class="btn btn--ghost" @click="stopCookTimer()" x-show="cookTimerRemaining !== null">Stop</button>
-          <span class="cook-timer__display" x-show="cookTimerRemaining !== null" x-text="formatCookCountdown(cookTimerRemaining)"></span>
-          <p class="cook-timer__done" x-show="cookTimerDone">Time is up!</p>
+          <div class="cook-timer__shell" @click.outside="cookTimerPrefsOpen = false">
+            <div class="cook-timer__row">
+              <label class="cook-timer__label">
+                <span class="cook-timer__label-text">Min</span>
+                <input
+                  type="number"
+                  class="cook-timer__input"
+                  x-model="cookTimerMins"
+                  min="1"
+                  max="120"
+                  aria-label="Timer length in minutes"
+                />
+              </label>
+              <button type="button" class="btn btn--ghost" @click="startCookTimer()" :disabled="cookTimerRemaining !== null">Start</button>
+              <button type="button" class="btn btn--ghost" @click="stopCookTimer()" x-show="cookTimerRemaining !== null">Stop</button>
+              <span class="cook-timer__display" x-show="cookTimerRemaining !== null" x-text="formatCookCountdown(cookTimerRemaining)"></span>
+              <div class="cook-timer__prefs-wrap">
+                <button
+                  type="button"
+                  class="btn btn--ghost cook-timer__prefs-btn"
+                  id="cook-timer-prefs-trigger"
+                  @click="cookTimerPrefsOpen = !cookTimerPrefsOpen"
+                  :aria-expanded="cookTimerPrefsOpen"
+                  aria-haspopup="dialog"
+                  aria-controls="cook-timer-prefs-panel"
+                >Alarm</button>
+              </div>
+            </div>
+            <div
+              id="cook-timer-prefs-panel"
+              class="cook-timer__prefs-panel"
+              role="dialog"
+              aria-label="Alarm preferences"
+              x-show="cookTimerPrefsOpen"
+              x-transition
+              style="display: none;"
+            >
+              <label class="cook-timer__field">
+                <span class="cook-timer__field-label">Sound</span>
+                <select class="cook-timer__select" x-model="cookAlarmSound" @change="persistCookTimerPrefs()">
+                  <option value="classic">Classic buzz</option>
+                  <option value="chime">Chime</option>
+                  <option value="double">Double beep</option>
+                  <option value="low">Low tone</option>
+                  <option value="silent">Off (silent)</option>
+                </select>
+              </label>
+              <label class="cook-timer__check cook-timer__check--block">
+                <input type="checkbox" x-model="cookAlarmRepeat" @change="persistCookTimerPrefs()" />
+                Repeat alarm until you tap Dismiss
+              </label>
+              <label class="cook-timer__check">
+                <input type="checkbox" x-model="cookAlarmVibrate" @change="persistCookTimerPrefs()" :disabled="!cookVibrationSupported()" />
+                Vibration (if supported)
+              </label>
+              <label class="cook-timer__field" :class="{ 'cook-timer__field--muted': cookAlarmSound === 'silent' }">
+                <span
+                  class="cook-timer__field-label"
+                  x-text="cookAlarmSound === 'silent' ? 'Volume' : ('Volume (' + cookAlarmVolumePct + '%)')"
+                ></span>
+                <input
+                  type="range"
+                  class="cook-timer__range"
+                  min="0"
+                  max="100"
+                  x-model.number="cookAlarmVolumePct"
+                  @input="persistCookTimerPrefs()"
+                  aria-label="Alarm volume"
+                  :disabled="cookAlarmSound === 'silent'"
+                />
+              </label>
+            </div>
+          </div>
+          <div class="cook-timer__done-row" x-show="cookTimerDone">
+            <p class="cook-timer__done">Time is up!</p>
+            <button type="button" class="btn btn--ghost" @click="dismissCookAlarm()" aria-label="Stop alarm and dismiss">Dismiss</button>
+          </div>
         </div>
 
         <footer class="cook-mode__footer">
@@ -800,6 +862,9 @@ import {
       'cNotes',
     ];
 
+    const COOK_TIMER_PREFS_KEY = 'recipesuggest_cook_timer_prefs_v1';
+    const COOK_ALARM_SOUND_IDS = new Set(['classic', 'chime', 'double', 'low', 'silent']);
+
     function searchPrefsMeaningful(p) {
       if (!p || typeof p !== 'object') return false;
       for (let i = 0; i < SEARCH_PREF_KEYS.length; i++) {
@@ -875,6 +940,13 @@ import {
         cookTimerRemaining: null,
         cookTimerDone: false,
         _cookTimerId: null,
+        _cookAlarmRepeatId: null,
+        _cookAudioCtx: null,
+        cookTimerPrefsOpen: false,
+        cookAlarmSound: 'classic',
+        cookAlarmRepeat: false,
+        cookAlarmVibrate: true,
+        cookAlarmVolumePct: 75,
         cookStepsCompleted: [],
         cookStepDetailOpen: {},
         cookStepGuidanceOpen: {},
@@ -1497,6 +1569,178 @@ import {
           return m + ':' + String(s).padStart(2, '0');
         },
 
+        cookVibrationSupported() {
+          return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+        },
+
+        hydrateCookTimerPrefs() {
+          try {
+            const raw = localStorage.getItem(COOK_TIMER_PREFS_KEY);
+            if (!raw) return;
+            const p = JSON.parse(raw);
+            if (!p || typeof p !== 'object') return;
+            if (typeof p.cookAlarmSound === 'string' && COOK_ALARM_SOUND_IDS.has(p.cookAlarmSound)) {
+              this.cookAlarmSound = p.cookAlarmSound;
+            }
+            if (typeof p.cookAlarmRepeat === 'boolean') this.cookAlarmRepeat = p.cookAlarmRepeat;
+            if (typeof p.cookAlarmVibrate === 'boolean') this.cookAlarmVibrate = p.cookAlarmVibrate;
+            const pct = Number(p.cookAlarmVolumePct);
+            if (Number.isFinite(pct) && pct >= 0 && pct <= 100) {
+              this.cookAlarmVolumePct = Math.round(pct);
+            }
+          } catch {
+            /* ignore */
+          }
+        },
+
+        persistCookTimerPrefs() {
+          try {
+            localStorage.setItem(
+              COOK_TIMER_PREFS_KEY,
+              JSON.stringify({
+                cookAlarmSound: this.cookAlarmSound,
+                cookAlarmRepeat: !!this.cookAlarmRepeat,
+                cookAlarmVibrate: !!this.cookAlarmVibrate,
+                cookAlarmVolumePct: Math.max(0, Math.min(100, Number(this.cookAlarmVolumePct) || 0)),
+              }),
+            );
+          } catch {
+            /* ignore quota */
+          }
+        },
+
+        _clearCookCountdownInterval() {
+          if (this._cookTimerId) {
+            clearInterval(this._cookTimerId);
+            this._cookTimerId = null;
+          }
+        },
+
+        _clearCookAlarmLoops() {
+          if (this._cookAlarmRepeatId) {
+            clearInterval(this._cookAlarmRepeatId);
+            this._cookAlarmRepeatId = null;
+          }
+        },
+
+        _closeCookAudioContext() {
+          if (!this._cookAudioCtx) return;
+          try {
+            if (this._cookAudioCtx.state !== 'closed') {
+              this._cookAudioCtx.close();
+            }
+          } catch {
+            /* ignore */
+          }
+          this._cookAudioCtx = null;
+        },
+
+        _clearCookAlarm() {
+          this._clearCookAlarmLoops();
+          this._closeCookAudioContext();
+        },
+
+        async ensureCookAudioContext() {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return null;
+          if (!this._cookAudioCtx || this._cookAudioCtx.state === 'closed') {
+            this._cookAudioCtx = new AC();
+          }
+          if (this._cookAudioCtx.state === 'suspended') {
+            await this._cookAudioCtx.resume();
+          }
+          return this._cookAudioCtx;
+        },
+
+        _pulseCookVibration() {
+          if (!this.cookAlarmVibrate || !this.cookVibrationSupported()) return;
+          try {
+            if (this.cookAlarmRepeat) {
+              navigator.vibrate([160, 100, 160, 100, 160]);
+            } else {
+              navigator.vibrate(240);
+            }
+          } catch {
+            /* ignore */
+          }
+        },
+
+        _scheduleCookAlarmAudio(sound, volume01) {
+          const base = Math.max(0, Math.min(0.22, 0.06 + volume01 * 0.16));
+          const tone = (ctx, master, t0, freq, start, dur, type = 'sine') => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = type;
+            o.frequency.value = freq;
+            const s = t0 + start;
+            const e = s + dur;
+            g.gain.setValueAtTime(0, s);
+            g.gain.linearRampToValueAtTime(base, s + 0.012);
+            g.gain.setValueAtTime(base, e - 0.025);
+            g.gain.linearRampToValueAtTime(0, e);
+            o.connect(g);
+            g.connect(master);
+            o.start(s);
+            o.stop(e + 0.03);
+          };
+
+          void (async () => {
+            try {
+              const ctx = await this.ensureCookAudioContext();
+              if (!ctx) return;
+              const t0 = ctx.currentTime;
+              const master = ctx.createGain();
+              master.gain.value = Math.max(0.15, Math.min(1, volume01 * 0.95 + 0.05));
+              master.connect(ctx.destination);
+
+              switch (sound) {
+                case 'classic':
+                  tone(ctx, master, t0, 880, 0, 0.22);
+                  break;
+                case 'chime':
+                  tone(ctx, master, t0, 523.25, 0, 0.14);
+                  tone(ctx, master, t0, 659.25, 0.16, 0.2);
+                  tone(ctx, master, t0, 783.99, 0.36, 0.24);
+                  break;
+                case 'double':
+                  tone(ctx, master, t0, 440, 0, 0.1);
+                  tone(ctx, master, t0, 440, 0.2, 0.1);
+                  break;
+                case 'low':
+                  tone(ctx, master, t0, 196, 0, 0.38);
+                  break;
+                default:
+                  tone(ctx, master, t0, 880, 0, 0.22);
+              }
+            } catch {
+              /* ignore */
+            }
+          })();
+        },
+
+        _playCookAlarmBurst() {
+          this._pulseCookVibration();
+          const sound = this.cookAlarmSound;
+          const pct = Math.max(0, Math.min(100, Number(this.cookAlarmVolumePct) || 0));
+          const volume01 = pct / 100;
+          if (sound === 'silent' || volume01 <= 0) return;
+          this._scheduleCookAlarmAudio(sound, volume01);
+        },
+
+        _startCookAlarmSequence() {
+          this._playCookAlarmBurst();
+          if (!this.cookAlarmRepeat) return;
+          this._clearCookAlarmLoops();
+          this._cookAlarmRepeatId = setInterval(() => {
+            this._playCookAlarmBurst();
+          }, 2800);
+        },
+
+        dismissCookAlarm() {
+          this._clearCookAlarm();
+          this.cookTimerDone = false;
+        },
+
         startCookTimer() {
           this.stopCookTimer();
           this.cookTimerDone = false;
@@ -1504,6 +1748,7 @@ import {
           if (!Number.isFinite(mins) || mins < 1) mins = 5;
           if (mins > 120) mins = 120;
           this.cookTimerRemaining = mins * 60;
+          void this.ensureCookAudioContext();
           this._cookTimerId = setInterval(() => {
             this.cookTimerRemaining--;
             if (this.cookTimerRemaining <= 0) {
@@ -1513,30 +1758,14 @@ import {
         },
 
         stopCookTimer(ding) {
-          if (this._cookTimerId) {
-            clearInterval(this._cookTimerId);
-            this._cookTimerId = null;
-          }
+          this._clearCookCountdownInterval();
           this.cookTimerRemaining = null;
           if (ding) {
             this.cookTimerDone = true;
-            try {
-              const AC = window.AudioContext || window.webkitAudioContext;
-              if (AC) {
-                const ctx = new AC();
-                const o = ctx.createOscillator();
-                const g = ctx.createGain();
-                o.connect(g);
-                g.connect(ctx.destination);
-                o.frequency.value = 880;
-                g.gain.value = 0.07;
-                o.start();
-                setTimeout(() => {
-                  o.stop();
-                  ctx.close();
-                }, 220);
-              }
-            } catch (_e) {}
+            this._startCookAlarmSequence();
+          } else {
+            this._clearCookAlarm();
+            this.cookTimerDone = false;
           }
         },
 
@@ -1673,6 +1902,7 @@ import {
 
         init() {
           this.history = JSON.parse(localStorage.getItem('recipesuggest_recent_searches') || '[]');
+          this.hydrateCookTimerPrefs();
 
           SEARCH_PREF_KEYS.forEach((k) => {
             this.$watch(k, () => this.queuePersistSearchPreferences());
