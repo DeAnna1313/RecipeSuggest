@@ -1,0 +1,32 @@
+# Example GitHub Actions workflow for Playwright E2E (not active until placed under .github/workflows/).
+# Copy to `.github/workflows/e2e.yml` in the repo or add via the GitHub UI.
+# Pushes that create/update files under `.github/workflows/` require a token with the `workflow` OAuth scope
+# (some IDE/Git integrations do not include it).
+
+name: E2E
+
+on:
+  push:
+    branches: [main, master, "feat/**"]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+      - name: Run Playwright smoke (mocked suggest)
+        env:
+          CI: "true"
+          OPENAI_API_KEY: "mock-ci-key"
+          PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_mock"
+          CLERK_SECRET_KEY: "sk_test_mock"
+        run: npm run test:e2e

@@ -749,11 +749,15 @@ import {
         body: JSON.stringify(recipe),
       })
         .then(async (res) => {
-          let data = {};
+          let data;
           try {
             data = await res.json();
           } catch {
-            if (!res.ok) throw new Error('Network error loading photo');
+            throw new Error(
+              res.ok
+                ? 'Invalid response from image service'
+                : 'Network error loading photo',
+            );
           }
           if (!res.ok) {
             throw new Error(
@@ -810,7 +814,7 @@ import {
       }
     };
 
-    window.initRecipeCards = function(root = document) {
+    window.initRecipeCards = async function (root = document) {
       const key = 'recipesuggest_bookmarks';
       const bookmarks = JSON.parse(localStorage.getItem(key) || '[]');
       root.querySelectorAll('.recipe-card__bookmark[data-recipe-id]').forEach(btn => {
@@ -822,24 +826,26 @@ import {
         }
       });
 
-      root.querySelectorAll('.recipe-card[data-recipe]').forEach(async (card) => {
-        const el = card;
-        const raw = el.dataset.recipe;
-        if (!raw || typeof window.ensureRecipeImage !== 'function') return;
-        try {
-          const recipe = JSON.parse(decodeURIComponent(escape(atob(raw))));
-          const imageUrl = await window.ensureRecipeImage(recipe);
-          if (typeof window.applyRecipeImageToCard === 'function') {
-            window.applyRecipeImageToCard(el, recipe, imageUrl);
+      const cards = root.querySelectorAll('.recipe-card[data-recipe]');
+      await Promise.all(
+        Array.from(cards).map(async (el) => {
+          const raw = el.dataset.recipe;
+          if (!raw || typeof window.ensureRecipeImage !== 'function') return;
+          try {
+            const recipe = JSON.parse(decodeURIComponent(escape(atob(raw))));
+            const imageUrl = await window.ensureRecipeImage(recipe);
+            if (typeof window.applyRecipeImageToCard === 'function') {
+              window.applyRecipeImageToCard(el, recipe, imageUrl);
+            }
+          } catch {
+            const placeholder = el.querySelector('.recipe-card__placeholder');
+            if (placeholder) {
+              placeholder.textContent = 'Photo unavailable';
+              placeholder.classList.remove('recipe-card__placeholder--loading');
+            }
           }
-        } catch {
-          const placeholder = el.querySelector('.recipe-card__placeholder');
-          if (placeholder) {
-            placeholder.textContent = 'Photo unavailable';
-            placeholder.classList.remove('recipe-card__placeholder--loading');
-          }
-        }
-      });
+        }),
+      );
     };
 
     const SEARCH_PREF_LOCAL_KEY = 'recipesuggest_search_prefs_v1';
@@ -1213,7 +1219,7 @@ import {
             target.innerHTML = html;
             window.scrollTo({ top: target.offsetTop ? target.offsetTop - 20 : 0, behavior: 'smooth' });
           }
-          window.initRecipeCards?.(target);
+          void window.initRecipeCards?.(target);
           const ids = this.extractRecipeIds(target);
           this.seenRecipeIds = ids;
           return ids;

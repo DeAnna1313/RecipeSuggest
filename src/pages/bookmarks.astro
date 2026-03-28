@@ -250,11 +250,15 @@ import {
                 body: JSON.stringify(recipe),
               });
 
-              let data = {};
+              let data;
               try {
                 data = await response.json();
               } catch {
-                if (!response.ok) throw new Error('Network error generating image');
+                throw new Error(
+                  response.ok
+                    ? 'Invalid response from image service'
+                    : 'Network error generating image',
+                );
               }
               if (!response.ok) {
                 throw new Error(

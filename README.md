@@ -58,7 +58,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-GitHub Actions workflow `.github/workflows/e2e.yml` runs the same suite with placeholder Clerk keys.
+Optional CI: copy `docs/github-actions-e2e.example.yml` to `.github/workflows/e2e.yml` (or add it in the GitHub UI). Pushes that modify files under `.github/workflows/` need a Git credential with the **`workflow`** OAuth scope; tools that omit it will show `refusing to allow an OAuth App ... without workflow scope`.
 
 ## Deploy (Netlify)
 
