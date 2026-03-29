@@ -1,3 +1,9 @@
+# Netlify secret scanning flags env values inlined by Astro/Vite into SSR bundles and
+# client chunks. Those paths are build artifacts, not repo leaks.
+# https://docs.netlify.com/build/environment-variables/secrets-controller/#configure-secret-scanning
 [build]
   command = "npm run build"
   publish = "dist"
+
+[build.environment]
+  SECRETS_SCAN_OMIT_PATHS = ".netlify,dist/_astro"

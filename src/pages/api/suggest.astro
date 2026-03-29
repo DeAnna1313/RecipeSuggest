@@ -75,8 +75,13 @@ try {
     });
   }
 } catch (e: unknown) {
-  error =
-    e instanceof Error ? e.message : "Something went wrong. Please try again.";
+  const msg = e instanceof Error ? e.message : "";
+  if (/401\s+status code/i.test(msg)) {
+    error =
+      "OpenAI rejected the API key (401). If you are on Netlify, add OPENAI_API_KEY under Site configuration → Environment variables (same value as local .env), then trigger a new deploy.";
+  } else {
+    error = msg || "Something went wrong. Please try again.";
+  }
 }
 
 function difficultyClass(d: string) {
