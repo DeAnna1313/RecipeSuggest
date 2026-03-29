@@ -1,4 +1,11 @@
+import { createHash } from "node:crypto";
 import OpenAI from "openai";
+
+/** One recipe step: main action plus optional extra guidance (tips, temps, safety). */
+export interface RecipeInstructionStep {
+  text: string;
+  guidance: string;
+}
 
 export interface Recipe {
   id: string;
@@ -7,9 +14,42 @@ export interface Recipe {
   cookTime: string;
   difficulty: "easy" | "medium" | "hard";
   ingredients: string[];
-  instructions: string[];
+  instructions: RecipeInstructionStep[];
+  /** Portions the ingredient amounts are written for (used for scaling). */
+  servings?: number;
   imageUrl?: string;
 }
+
+/** Normalize API/localStorage instructions (legacy string[] or partial objects). */
+export function normalizeRecipeInstructions(raw: unknown): RecipeInstructionStep[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    if (typeof item === "string") {
+      const text = item.trim();
+      return { text: text || "Step", guidance: "" };
+    }
+    if (item && typeof item === "object") {
+      const o = item as Record<string, unknown>;
+      const fromText =
+        typeof o.text === "string"
+          ? o.text.trim()
+          : typeof o.step === "string"
+            ? o.step.trim()
+            : "";
+      const text = fromText || String(o.main ?? "").trim() || "Step";
+      const guidanceRaw =
+        typeof o.guidance === "string"
+          ? o.guidance.trim()
+          : typeof o.tip === "string"
+            ? o.tip.trim()
+            : "";
+      return { text, guidance: guidanceRaw };
+    }
+    return { text: String(item), guidance: "" };
+  });
+}
+
+export type UnitSystem = "us" | "metric";
 
 export interface SuggestConstraints {
   vegetarian?: boolean;
@@ -19,6 +59,12 @@ export interface SuggestConstraints {
   nutFree?: boolean;
   maxTimeMins?: number;
   notes?: string;
+  /** Target servings for every suggested recipe (default 4). */
+  servings?: number;
+  /** Ingredient measurements in US customary vs metric. */
+  unitSystem?: UnitSystem;
+  /** Cooking hardware the user has available. */
+  appliances?: string[];
 }
 
 /* ── In-memory response cache ────────────────── */
@@ -40,6 +86,16 @@ function normalizeConstraints(
 ): SuggestConstraints {
   if (!c || typeof c !== "object") return {};
   const max = Number(c.maxTimeMins);
+  const serv = Number(c.servings);
+  const unit =
+    c.unitSystem === "metric" || c.unitSystem === "us" ? c.unitSystem : undefined;
+  const appliances = Array.isArray(c.appliances)
+    ? [...new Set(
+        c.appliances
+          .map((v) => String(v).trim().toLowerCase())
+          .filter(Boolean),
+      )]
+    : undefined;
   return {
     vegetarian: !!c.vegetarian,
     vegan: !!c.vegan,
@@ -49,6 +105,10 @@ function normalizeConstraints(
     maxTimeMins: Number.isFinite(max) && max > 0 ? Math.round(max) : undefined,
     notes:
       typeof c.notes === "string" && c.notes.trim() ? c.notes.trim() : undefined,
+    servings:
+      Number.isFinite(serv) && serv >= 1 && serv <= 24 ? Math.round(serv) : undefined,
+    unitSystem: unit,
+    appliances: appliances?.length ? appliances : undefined,
   };
 }
 
@@ -61,6 +121,34 @@ function cacheKey(
     .filter(Boolean)
     .sort();
   return JSON.stringify({ ing, c: constraints });
+}
+
+/** Replace model-provided ids so each dish is unique per ingredient set (fixes image cache collisions). */
+function assignStableRecipeIds(
+  recipes: Recipe[],
+  ingredients: string[],
+  constraints: SuggestConstraints,
+): void {
+  const ingKey = [...ingredients]
+    .map((i) => i.trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join("|");
+  const cKey = JSON.stringify(normalizeConstraints(constraints));
+
+  recipes.forEach((r, index) => {
+    if (!r || typeof r !== "object") return;
+    const h = createHash("sha256")
+      .update(`${ingKey}\0${cKey}\0${String(r.title || "").toLowerCase()}\0${index}`)
+      .digest("hex")
+      .slice(0, 14);
+    const rawSlug = String(r.title || "recipe")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 36);
+    r.id = `${rawSlug || "recipe"}-${h}`;
+  });
 }
 
 function constraintsPromptBlock(c: SuggestConstraints): string {
@@ -97,7 +185,30 @@ function constraintsPromptBlock(c: SuggestConstraints): string {
   if (c.notes) {
     lines.push(`Additional user preferences: ${c.notes}`);
   }
-  if (lines.length === 0) return "";
+  if (c.appliances?.length) {
+    if (c.appliances.includes("none")) {
+      lines.push(
+        "The user has no cooking hardware available. Only suggest recipes that do not require stove, oven, microwave, air fryer, or other cooking equipment.",
+      );
+    } else {
+      lines.push(
+        `Only use these cooking hardware options: ${c.appliances.join(", ")}. Do not rely on equipment outside this list.`,
+      );
+    }
+  }
+  const servings = c.servings ?? 4;
+  lines.push(
+    `Write ingredient amounts for ${servings} serving${servings === 1 ? "" : "s"} each (consistent across all four recipes). Include "servings": ${servings} in each recipe object.`,
+  );
+  if (c.unitSystem === "metric") {
+    lines.push(
+      "Use metric measurements only in ingredient lines (g, kg, ml, L, °C where relevant).",
+    );
+  } else if (c.unitSystem === "us") {
+    lines.push(
+      "Use US customary measurements in ingredient lines (cups, tbsp, tsp, oz, lb, °F where relevant).",
+    );
+  }
   return `\n\nStrict requirements (you must follow all):\n- ${lines.join("\n- ")}`;
 }
 
@@ -105,9 +216,16 @@ function constraintsPromptBlock(c: SuggestConstraints): string {
 export async function suggestRecipes(
   ingredients: string[],
   constraints: SuggestConstraints = {},
+  options: { excludeRecipeIds?: string[] } = {},
 ): Promise<Recipe[]> {
   const c = normalizeConstraints(constraints);
-  const key = cacheKey(ingredients, c);
+  const excludeRecipeIds = Array.isArray(options.excludeRecipeIds)
+    ? options.excludeRecipeIds.map((v) => String(v).trim()).filter(Boolean).sort()
+    : [];
+  const key = JSON.stringify({
+    base: cacheKey(ingredients, c),
+    excludeRecipeIds,
+  });
 
   if (cache.has(key)) {
     return cache.get(key)!;
@@ -117,14 +235,30 @@ export async function suggestRecipes(
 
   const systemPrompt = `You are a careful cooking coach for beginners (including teenagers with little kitchen experience). The user lists ingredients they already have. Suggest exactly 4 recipes that work well with those ingredients.
 
+Grounding and honesty (NON-NEGOTIABLE):
+- The user's listed ingredients are: the primary constraint. Together, the four recipes must use every user-listed ingredient at least once across the set (pantry staples like salt, oil, and water do not count toward that rule). Do not ignore an ingredient the user typed unless you briefly explain in that recipe's description why it was skipped (e.g. conflict with a hard constraint).
+- Each recipe must be clearly different in title, technique, and flavor profile. Do not output four near-duplicate casseroles or rice dishes unless the ingredients truly leave no alternative—if so, say so in one description.
+- When a dish matches a widely known classic (e.g., carbonara, fried rice, chili, ratatouille, shakshuka), use the standard English name in the title and keep the method faithful to that dish. When you are improvising a plausible home combination that is not a classic name, say in the description that it is an "original combination" or "home-style skillet / bowl" using their ingredients—not a famous restaurant or brand-exclusive recipe.
+- You cannot verify recipes against live cookbooks. Never invent a fake "source" or URL. Do not claim a recipe is from a specific chef, blog, or trademarked product.
+
+Accuracy and safety (NON-NEGOTIABLE):
+- Base cooking methods, times, temperatures, and food-safety steps on standard home-kitchen practice and widely published food-safety guidance (e.g. USDA/FDA for the US). Do not invent "shortcuts" that skip safe handling of raw animal products.
+- Do not present guesses as facts. If a time or temperature varies by thickness or equipment, say so and tell the cook what to verify (e.g. internal temperature with a thermometer).
+- For raw poultry (chicken, turkey, duck, etc.): instructions MUST state that the cook must heat the poultry to a safe internal temperature of 165°F (74°C) measured with a food thermometer in the thickest part (no relying on "until the soup boils" or color alone as proof of safety). For ground poultry, the same 165°F (74°C) minimum applies.
+- If a recipe uses chicken or other poultry that is NOT cooked from raw (e.g. rotisserie, leftover roasted, canned, or par-cooked product), state that explicitly in BOTH the ingredients list AND the instructions (e.g. "2 cups cooked shredded chicken breast (from rotisserie or leftovers)"). Never imply raw poultry is safe because a liquid was brought to a boil unless you also include the internal-temp rule for any raw pieces.
+- Whenever poultry or meat appears, name it precisely in ingredients: species, cut, and form (e.g. "1 lb boneless skinless chicken thighs, raw" vs "2 cups diced cooked chicken breast"). Same for other meats (pork chops, ground beef, etc.)—raw vs precooked and cut/grind.
+- For other high-risk foods (ground meats, eggs in sauces, leftovers), follow conventional safe temperatures and handling; state doneness by internal temperature where it matters, not only by time.
+- Briefly note cross-contamination basics when raw poultry/meat is used (use a clean board/utensils after cooking, wash hands)—one short phrase in a relevant step is enough.
+
 Rules for ingredients (IMPORTANT):
 - The "ingredients" array must list EVERYTHING used in the dish, including common pantry items if they appear in the recipe: e.g. butter, salt, black pepper, olive oil or vegetable oil, water, sugar, flour, garlic, lemon juice, basic spices, etc. Use clear amounts where helpful (e.g. "2 tbsp butter", "salt and black pepper to taste").
 - Do not hide staples—someone should read the list and know what to gather before cooking, even if they already have it at home.
 
 Rules for instructions (IMPORTANT):
 - Use 6–14 steps per recipe. One main action per step, in strict order.
-- Be explicit: say approximate heat (e.g. medium heat), times, when to stir, what "done" looks like (color/texture), and simple safety (hot pan, oven mitts for oven).
-- Define terms briefly when needed (e.g. "dice = small cubes").
+- Every step MUST be an object with "text" and "guidance" (both strings). "text" = the primary action (what to do now, clearly and in order). "guidance" = a second line of helpful detail that does NOT repeat "text" verbatim: e.g. internal temps and how to measure them, visual/texture cues for doneness, timing if it varies by thickness, equipment tips, or one concise safety note. Every step MUST have a non-empty "guidance" with at least one concrete detail.
+- Be explicit in the pair together: approximate heat, stirring, what "done" looks like—distribute between text and guidance as needed without duplication.
+- Define terms briefly when needed (e.g. in guidance: "dice = small cubes").
 - Assume no prior knowledge but keep language friendly, not condescending.
 
 If the user gave dietary or time constraints in their message, every recipe must satisfy them. If it is impossible with only their listed ingredients, prefer recipes that are close and note any minimal extra need in the description (still obey JSON schema).
@@ -132,16 +266,25 @@ If the user gave dietary or time constraints in their message, every recipe must
 Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON must be an array of exactly 4 objects with this schema:
 
 {
-  "id": "unique-slug",
+  "id": "temporary-id-will-be-replaced-server-side",
   "title": "Recipe Title",
   "description": "A short 1-2 sentence description of the dish.",
   "cookTime": "e.g. 25 mins",
   "difficulty": "easy" | "medium" | "hard",
+  "servings": 4,
   "ingredients": ["each item with amount if sensible"],
-  "instructions": ["Step 1 — ...", "Step 2 — ..."]
+  "instructions": [
+    {
+      "text": "Primary step action (clear, ordered).",
+      "guidance": "Extra detail only: temps, doneness cues, timing variables, tips—do not repeat text verbatim."
+    }
+  ]
 }`;
 
-  const userPrompt = `I have these ingredients: ${ingredients.join(", ")}${constraintsPromptBlock(c)}`;
+  const excludePrompt = excludeRecipeIds.length
+    ? `\nDo not repeat or closely duplicate any recipe whose id is in this list: ${excludeRecipeIds.join(", ")}. Create four clearly different recipe ideas from the earlier batch.`
+    : "";
+  const userPrompt = `I have these ingredients: ${ingredients.join(", ")}${constraintsPromptBlock(c)}${excludePrompt}`;
 
   const response = await client.chat.completions.create({
     model: "gpt-4o-mini",
@@ -149,7 +292,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    temperature: 0.7,
+    temperature: 0.72,
     max_tokens: 5000,
   });
 
@@ -172,31 +315,92 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
     throw new Error("AI returned an empty or invalid response.");
   }
 
+  const targetServings = c.servings ?? 4;
+  assignStableRecipeIds(recipes as Recipe[], ingredients, c);
+  for (const r of recipes) {
+    if (r && typeof r === "object") {
+      const n = Number((r as Recipe).servings);
+      (r as Recipe).servings =
+        Number.isFinite(n) && n > 0 ? Math.round(n) : targetServings;
+      (r as Recipe).instructions = normalizeRecipeInstructions(
+        (r as Recipe).instructions as unknown,
+      );
+    }
+  }
+
   cache.set(key, recipes);
   return recipes;
 }
 
+function buildRecipeImagePrompt(recipe: Recipe): string {
+  const title = (recipe.title ?? "").trim() || "the dish";
+  const desc = (recipe.description ?? "").trim().slice(0, 320);
+  const ingredients = (recipe.ingredients ?? [])
+    .map((i) => String(i).trim())
+    .filter(Boolean)
+    .slice(0, 16)
+    .join("; ");
+
+  const parts = [
+    "Photorealistic editorial food photograph of ONE finished plated dish.",
+    `The dish must unmistakably be: "${title}".`,
+    desc ? `How it should look (flavor, style, texture cues): ${desc}` : "",
+    ingredients
+      ? `Plated food should clearly reflect these ingredients (cooked and combined, not a separate ingredient flat-lay): ${ingredients}`
+      : "",
+    "Must match this specific recipe, not a generic unrelated meal.",
+    "Single plate or shallow bowl; 45° or three-quarter angle; shallow depth of field; appetizing natural light.",
+    "No people, hands, faces, packaging, raw shopping piles, or multiple unrelated dishes.",
+    "No text, letters, numbers, watermarks, or logos anywhere in the image.",
+  ];
+  return parts.filter(Boolean).join(" ");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function generateRecipeImage(recipe: Recipe): Promise<string> {
   const client = getOpenAIClient();
-  const prompt = [
-    "Simple realistic photo of the finished plated dish only.",
-    recipe.title + ".",
-    recipe.description.slice(0, 200),
-    "Natural light, no text or watermark.",
-  ].join(" ");
+  const prompt = buildRecipeImagePrompt(recipe);
 
-  const response = await client.images.generate({
-    model: "gpt-image-1",
-    prompt,
-    size: "1024x1024",
-    quality: "low",
-  });
+  let lastErr: Error | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await client.images.generate({
+        model: "gpt-image-1",
+        prompt,
+        size: "auto",
+        quality: "low",
+        moderation: "low",
+        output_format: "jpeg",
+        output_compression: 82,
+      });
 
-  const imageBase64 = response.data?.[0]?.b64_json;
+      const imageBase64 = response.data?.[0]?.b64_json;
+      if (imageBase64) {
+        return `data:image/jpeg;base64,${imageBase64}`;
+      }
 
-  if (!imageBase64) {
-    throw new Error("Image generation returned no image data.");
+      const url = response.data?.[0]?.url;
+      if (url) {
+        return url;
+      }
+
+      lastErr = new Error("Image generation returned no image data.");
+    } catch (e) {
+      lastErr =
+        e instanceof Error ? e : new Error("Image generation request failed.");
+    }
+
+    if (attempt < 2) {
+      const msg = (lastErr?.message ?? "").toLowerCase();
+      const ms = msg.includes("429") || msg.includes("rate")
+        ? 900 * (attempt + 1)
+        : 500 * (attempt + 1);
+      await sleep(ms);
+    }
   }
 
-  return `data:image/png;base64,${imageBase64}`;
+  throw lastErr ?? new Error("Image generation failed.");
 }

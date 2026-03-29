@@ -1,0 +1,43 @@
+---
+export const prerender = false;
+
+import {
+  recipeToStandaloneHtml,
+  recipesCollectionToHtml,
+} from "../../lib/export-recipe-html";
+import type { Recipe } from "../../lib/recipes";
+
+if (Astro.request.method !== "POST") {
+  return new Response("Method not allowed", { status: 405 });
+}
+
+const body = (await Astro.request.json()) as {
+  recipe?: Recipe;
+  recipes?: Recipe[];
+} | null;
+
+if (body?.recipes && Array.isArray(body.recipes)) {
+  const list = body.recipes.filter(
+    (r): r is Recipe =>
+      r != null && typeof r === "object" && typeof r.title === "string",
+  );
+  const html = recipesCollectionToHtml(list);
+  return new Response(html, {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
+const recipe = body?.recipe;
+if (
+  !recipe?.title ||
+  !Array.isArray(recipe.ingredients) ||
+  !Array.isArray(recipe.instructions)
+) {
+  return new Response("Invalid recipe", { status: 400 });
+}
+
+const html = recipeToStandaloneHtml(recipe);
+return new Response(html, {
+  headers: { "Content-Type": "text/html; charset=utf-8" },
+});
+---

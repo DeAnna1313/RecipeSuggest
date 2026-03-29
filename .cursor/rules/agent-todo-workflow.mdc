@@ -1,0 +1,28 @@
+---
+description: >-
+  Use the todo list tool for multi-step agent work only: multiple meaningful
+  steps, ordering that matters, or coordination git/tests/push/migrations across
+  files or systems. Skip for single obvious edits, Q&A, or planning with no repo
+  changes. Keep lists lean—outcome-shaped titles, at most one in_progress.
+alwaysApply: true
+---
+
+# Agent todo workflow
+
+Use the todo list tool for **multi-step** work only; skip it for single obvious edits or Q&A.
+
+## Use todos when
+
+- More than one meaningful step (e.g. investigate → change → verify → commit).
+- Order matters or work spans several files or systems.
+- Risk of losing track (git + tests + push, migrations, etc.).
+
+## Keep lists lean
+
+- Few items; outcome-shaped titles (e.g. “Run build and fix failures”), not micro-tasks.
+- At most one item `in_progress`; mark completed as you go; cancel if scope changes.
+
+## Do not require todos for
+
+- One small, localized change with a clear end state.
+- Explanations or planning with no repo edits.

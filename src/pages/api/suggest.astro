@@ -4,10 +4,7 @@ import {
   type Recipe,
   type SuggestConstraints,
 } from "../../lib/recipes";
-import {
-  checkRateLimit,
-  clientKeyFromRequest,
-} from "../../lib/rate-limit";
+import { checkRateLimitHybrid } from "../../lib/rate-limit-hybrid";
 
 function parseConstraints(raw: string | undefined): SuggestConstraints {
   if (!raw?.trim()) return {};
@@ -28,6 +25,16 @@ if (Astro.request.method !== "POST") {
 let recipes: Recipe[] = [];
 let error = "";
 
+function parseStringArray(raw: string | undefined): string[] {
+  if (!raw?.trim()) return [];
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return Array.isArray(v) ? v.map((x) => String(x)) : [];
+  } catch {
+    return [];
+  }
+}
+
 try {
   const formData = await Astro.request.formData();
   const ingredientsRaw = formData.get("ingredients")?.toString() ?? "";
@@ -41,8 +48,10 @@ try {
   } else {
     const auth = await Astro.locals.auth();
     const uid = auth.userId ?? null;
-    const rl = checkRateLimit(
-      clientKeyFromRequest(Astro.request, uid),
+    const rl = await checkRateLimitHybrid(
+      Astro.request,
+      uid,
+      "suggest",
       { maxAnon: 24, maxAuth: 96, windowMs: 15 * 60 * 1000 },
       !!uid,
     );
@@ -58,10 +67,21 @@ try {
     const constraints = parseConstraints(
       formData.get("constraints")?.toString(),
     );
-    recipes = await suggestRecipes(ingredients, constraints);
+    const excludeRecipeIds = parseStringArray(
+      formData.get("excludeRecipeIds")?.toString(),
+    );
+    recipes = await suggestRecipes(ingredients, constraints, {
+      excludeRecipeIds,
+    });
   }
-} catch (e: any) {
-  error = e.message ?? "Something went wrong. Please try again.";
+} catch (e: unknown) {
+  const msg = e instanceof Error ? e.message : "";
+  if (/401\s+status code/i.test(msg)) {
+    error =
+      "OpenAI rejected the API key (401). If you are on Netlify, add OPENAI_API_KEY under Site configuration → Environment variables (same value as local .env), then trigger a new deploy.";
+  } else {
+    error = msg || "Something went wrong. Please try again.";
+  }
 }
 
 function difficultyClass(d: string) {
@@ -87,9 +107,19 @@ function encodeRecipe(recipe: Recipe): string {
           role="button"
           tabindex="0"
           data-recipe={encodeRecipe(recipe)}
-          onclick="window.dispatchEvent(new CustomEvent('open-recipe', { detail: JSON.parse(decodeURIComponent(escape(atob(this.dataset.recipe)))) }))"
-          onkeydown="if(event.key==='Enter') window.dispatchEvent(new CustomEvent('open-recipe', { detail: JSON.parse(decodeURIComponent(escape(atob(this.dataset.recipe)))) }))"
+          onclick="window.dispatchOpenRecipe(this)"
+          onkeydown="if(event.key==='Enter') window.dispatchOpenRecipe(this)"
         >
+          <div class="recipe-card__media">
+            <img
+              class="recipe-card__image"
+              alt={recipe.title}
+              loading="lazy"
+            />
+            <div class="recipe-card__placeholder recipe-card__placeholder--loading">
+              Generating finished dish photo...
+            </div>
+          </div>
           <div class="recipe-card__header">
             <h3 class="recipe-card__title">{recipe.title}</h3>
             <button
@@ -115,17 +145,3 @@ function encodeRecipe(recipe: Recipe): string {
   )
 }
 
-<script>
-  // Initialize bookmark button states after HTMX swaps in this partial
-  document.querySelectorAll(".recipe-card__bookmark").forEach((btn) => {
-    const id = (btn as HTMLElement).dataset.recipeId;
-    const bookmarks = JSON.parse(
-      localStorage.getItem("recipesuggest_bookmarks") || "[]",
-    );
-    const isBookmarked = bookmarks.some((r: any) => r.id === id);
-    if (isBookmarked) {
-      btn.classList.add("is-bookmarked");
-      btn.querySelector("span")!.textContent = "★";
-    }
-  });
-</script>

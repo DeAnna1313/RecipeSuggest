@@ -21,6 +21,15 @@ import {
           <a href="/" class="site-nav__link">Suggest</a>
           <a href="/bookmarks" class="site-nav__link site-nav__link--active">Bookmarks</a>
         </nav>
+        <button
+          type="button"
+          class="theme-toggle no-print"
+          onclick="window.toggleRecipeSuggestTheme?.()"
+          title="Toggle light or dark theme"
+        >
+          <span class="theme-toggle__icon" aria-hidden="true">◐</span>
+          <span class="theme-toggle__label">Theme</span>
+        </button>
         <div class="auth-actions">
           <Show when="signed-out">
             <SignInButton mode="modal" asChild>
@@ -63,6 +72,14 @@ import {
             class="btn btn--ghost"
             type="button"
             x-show="bookmarks.length > 0"
+            @click="exportAllHtml()"
+          >
+            Download HTML
+          </button>
+          <button
+            class="btn btn--ghost"
+            type="button"
+            x-show="bookmarks.length > 0"
             @click="clearAll()"
           >
             Clear all
@@ -97,12 +114,13 @@ import {
                   <p class="bookmark-card__description" x-text="recipe.description"></p>
                 </div>
                 <button
-                  class="bookmark-card__remove no-print"
+                  class="recipe-card__bookmark is-bookmarked no-print"
                   type="button"
                   @click="removeBookmark(recipe.id)"
                   aria-label="Remove bookmark"
+                  title="Remove bookmark"
                 >
-                  Remove
+                  ★
                 </button>
               </div>
 
@@ -131,8 +149,18 @@ import {
               <div class="bookmark-card__section">
                 <h3 class="bookmark-card__section-title">Instructions</h3>
                 <ol class="bookmark-card__steps">
-                  <template x-for="step in recipe.instructions" :key="step">
-                    <li x-text="step"></li>
+                  <template x-for="(step, sidx) in recipe.instructions" :key="sidx">
+                    <li class="bookmark-card__step-line">
+                      <span
+                        class="bookmark-card__step-main"
+                        x-text="typeof step === 'string' ? step : (step && step.text)"
+                      ></span>
+                      <p
+                        class="bookmark-card__step-tip"
+                        x-show="step && typeof step === 'object' && step.guidance"
+                        x-text="step.guidance"
+                      ></p>
+                    </li>
                   </template>
                 </ol>
               </div>
@@ -151,8 +179,8 @@ import {
   </div>
 
   <script>
-    document.addEventListener('alpine:init', () => {
-      Alpine.data('bookmarksPage', () => ({
+    const initBookmarksPage = () => {
+      window.Alpine.data('bookmarksPage', () => ({
         bookmarks: [],
         statusMessage: '',
 
@@ -167,6 +195,32 @@ import {
         removeBookmark(id) {
           this.bookmarks = this.bookmarks.filter(recipe => recipe.id !== id);
           this.persist();
+        },
+
+        async exportAllHtml() {
+          if (this.bookmarks.length === 0) return;
+          const recipes = this.bookmarks.map(({ isGeneratingImage, ...recipe }) => recipe);
+          try {
+            const res = await fetch('/api/export-recipe-html', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ recipes }),
+            });
+            if (!res.ok) throw new Error('Export failed');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'recipesuggest-bookmarks.html';
+            a.click();
+            URL.revokeObjectURL(url);
+            this.statusMessage = 'Downloaded all recipes as HTML';
+            setTimeout(() => { this.statusMessage = ''; }, 2500);
+          } catch {
+            this.statusMessage = 'Could not export recipes';
+            setTimeout(() => { this.statusMessage = ''; }, 3000);
+          }
         },
 
         clearAll() {
@@ -196,9 +250,20 @@ import {
                 body: JSON.stringify(recipe),
               });
 
-              const data = await response.json();
+              let data;
+              try {
+                data = await response.json();
+              } catch {
+                throw new Error(
+                  response.ok
+                    ? 'Invalid response from image service'
+                    : 'Network error generating image',
+                );
+              }
               if (!response.ok) {
-                throw new Error(data.error || 'Failed to generate image.');
+                throw new Error(
+                  typeof data.error === 'string' ? data.error : 'Failed to generate image.',
+                );
               }
 
               recipe.imageUrl = data.imageUrl;
@@ -244,6 +309,26 @@ import {
           this.populateMissingImages();
         },
       }));
-    });
+    };
+
+    let alpineBooted = false;
+    const bootAlpinePage = () => {
+      if (alpineBooted || !window.Alpine) return;
+      alpineBooted = true;
+      initBookmarksPage();
+      const app = document.querySelector('.container');
+      if (app) window.Alpine.initTree(app);
+    };
+
+    const waitForAlpine = () => {
+      if (window.Alpine) {
+        bootAlpinePage();
+        return;
+      }
+      window.setTimeout(waitForAlpine, 25);
+    };
+
+    document.addEventListener('alpine:init', bootAlpinePage, { once: true });
+    waitForAlpine();
   </script>
 </Base>
