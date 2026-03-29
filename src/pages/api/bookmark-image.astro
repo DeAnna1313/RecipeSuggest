@@ -1,27 +1,13 @@
 ---
 import { generateRecipeImage, type Recipe } from "../../lib/recipes";
+import {
+  getCachedRecipePhoto,
+  setCachedRecipePhoto,
+} from "../../lib/recipe-image-blob";
 import { checkRateLimitHybrid } from "../../lib/rate-limit-hybrid";
 
 if (Astro.request.method !== "POST") {
   return new Response("Method not allowed", { status: 405 });
-}
-
-const auth = await Astro.locals.auth();
-const uid = auth.userId ?? null;
-const rl = await checkRateLimitHybrid(
-  Astro.request,
-  uid,
-  "image",
-  { maxAnon: 12, maxAuth: 48, windowMs: 60 * 60 * 1000 },
-  !!uid,
-);
-if (!rl.allowed) {
-  return Response.json(
-    {
-      error: `Image rate limit exceeded. Try again in ${rl.retryAfterSeconds} seconds.`,
-    },
-    { status: 429 },
-  );
 }
 
 try {
@@ -31,7 +17,36 @@ try {
     return new Response("Invalid recipe payload.", { status: 400 });
   }
 
+  if (typeof recipe.id === "string" && recipe.id.trim()) {
+    const cached = await getCachedRecipePhoto(recipe.id.trim());
+    if (cached) {
+      return Response.json({ imageUrl: cached });
+    }
+  }
+
+  const auth = await Astro.locals.auth();
+  const uid = auth.userId ?? null;
+  const rl = await checkRateLimitHybrid(
+    Astro.request,
+    uid,
+    "image",
+    { maxAnon: 12, maxAuth: 48, windowMs: 60 * 60 * 1000 },
+    !!uid,
+  );
+  if (!rl.allowed) {
+    return Response.json(
+      {
+        error: `Image rate limit exceeded. Try again in ${rl.retryAfterSeconds} seconds.`,
+      },
+      { status: 429 },
+    );
+  }
+
   const imageUrl = await generateRecipeImage(recipe);
+
+  if (typeof recipe.id === "string" && recipe.id.trim()) {
+    await setCachedRecipePhoto(recipe.id.trim(), imageUrl);
+  }
 
   return Response.json({ imageUrl });
 } catch (error: unknown) {

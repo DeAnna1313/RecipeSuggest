@@ -826,26 +826,27 @@ import {
         }
       });
 
-      const cards = root.querySelectorAll('.recipe-card[data-recipe]');
-      await Promise.all(
-        Array.from(cards).map(async (el) => {
-          const raw = el.dataset.recipe;
-          if (!raw || typeof window.ensureRecipeImage !== 'function') return;
-          try {
-            const recipe = JSON.parse(decodeURIComponent(escape(atob(raw))));
-            const imageUrl = await window.ensureRecipeImage(recipe);
-            if (typeof window.applyRecipeImageToCard === 'function') {
-              window.applyRecipeImageToCard(el, recipe, imageUrl);
-            }
-          } catch {
-            const placeholder = el.querySelector('.recipe-card__placeholder');
-            if (placeholder) {
-              placeholder.textContent = 'Photo unavailable';
-              placeholder.classList.remove('recipe-card__placeholder--loading');
-            }
+      const cards = Array.from(root.querySelectorAll('.recipe-card[data-recipe]'));
+      const loadOne = async (el) => {
+        const raw = el.dataset.recipe;
+        if (!raw || typeof window.ensureRecipeImage !== 'function') return;
+        try {
+          const recipe = JSON.parse(decodeURIComponent(escape(atob(raw))));
+          const imageUrl = await window.ensureRecipeImage(recipe);
+          if (typeof window.applyRecipeImageToCard === 'function') {
+            window.applyRecipeImageToCard(el, recipe, imageUrl);
           }
-        }),
-      );
+        } catch {
+          const placeholder = el.querySelector('.recipe-card__placeholder');
+          if (placeholder) {
+            placeholder.textContent = 'Photo unavailable';
+            placeholder.classList.remove('recipe-card__placeholder--loading');
+          }
+        }
+      };
+      for (let i = 0; i < cards.length; i += 3) {
+        await Promise.all(cards.slice(i, i + 3).map((el) => loadOne(el)));
+      }
     };
 
     const SEARCH_PREF_LOCAL_KEY = 'recipesuggest_search_prefs_v1';

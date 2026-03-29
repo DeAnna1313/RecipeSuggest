@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import OpenAI from "openai";
 
 /** One recipe step: main action plus optional extra guidance (tips, temps, safety). */
@@ -122,6 +123,34 @@ function cacheKey(
   return JSON.stringify({ ing, c: constraints });
 }
 
+/** Replace model-provided ids so each dish is unique per ingredient set (fixes image cache collisions). */
+function assignStableRecipeIds(
+  recipes: Recipe[],
+  ingredients: string[],
+  constraints: SuggestConstraints,
+): void {
+  const ingKey = [...ingredients]
+    .map((i) => i.trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join("|");
+  const cKey = JSON.stringify(normalizeConstraints(constraints));
+
+  recipes.forEach((r, index) => {
+    if (!r || typeof r !== "object") return;
+    const h = createHash("sha256")
+      .update(`${ingKey}\0${cKey}\0${String(r.title || "").toLowerCase()}\0${index}`)
+      .digest("hex")
+      .slice(0, 14);
+    const rawSlug = String(r.title || "recipe")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 36);
+    r.id = `${rawSlug || "recipe"}-${h}`;
+  });
+}
+
 function constraintsPromptBlock(c: SuggestConstraints): string {
   const lines: string[] = [];
   if (c.vegan) {
@@ -206,6 +235,12 @@ export async function suggestRecipes(
 
   const systemPrompt = `You are a careful cooking coach for beginners (including teenagers with little kitchen experience). The user lists ingredients they already have. Suggest exactly 4 recipes that work well with those ingredients.
 
+Grounding and honesty (NON-NEGOTIABLE):
+- The user's listed ingredients are: the primary constraint. Together, the four recipes must use every user-listed ingredient at least once across the set (pantry staples like salt, oil, and water do not count toward that rule). Do not ignore an ingredient the user typed unless you briefly explain in that recipe's description why it was skipped (e.g. conflict with a hard constraint).
+- Each recipe must be clearly different in title, technique, and flavor profile. Do not output four near-duplicate casseroles or rice dishes unless the ingredients truly leave no alternative—if so, say so in one description.
+- When a dish matches a widely known classic (e.g., carbonara, fried rice, chili, ratatouille, shakshuka), use the standard English name in the title and keep the method faithful to that dish. When you are improvising a plausible home combination that is not a classic name, say in the description that it is an "original combination" or "home-style skillet / bowl" using their ingredients—not a famous restaurant or brand-exclusive recipe.
+- You cannot verify recipes against live cookbooks. Never invent a fake "source" or URL. Do not claim a recipe is from a specific chef, blog, or trademarked product.
+
 Accuracy and safety (NON-NEGOTIABLE):
 - Base cooking methods, times, temperatures, and food-safety steps on standard home-kitchen practice and widely published food-safety guidance (e.g. USDA/FDA for the US). Do not invent "shortcuts" that skip safe handling of raw animal products.
 - Do not present guesses as facts. If a time or temperature varies by thickness or equipment, say so and tell the cook what to verify (e.g. internal temperature with a thermometer).
@@ -231,7 +266,7 @@ If the user gave dietary or time constraints in their message, every recipe must
 Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON must be an array of exactly 4 objects with this schema:
 
 {
-  "id": "unique-slug",
+  "id": "temporary-id-will-be-replaced-server-side",
   "title": "Recipe Title",
   "description": "A short 1-2 sentence description of the dish.",
   "cookTime": "e.g. 25 mins",
@@ -257,7 +292,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    temperature: 0.55,
+    temperature: 0.72,
     max_tokens: 5000,
   });
 
@@ -281,6 +316,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
   }
 
   const targetServings = c.servings ?? 4;
+  assignStableRecipeIds(recipes as Recipe[], ingredients, c);
   for (const r of recipes) {
     if (r && typeof r === "object") {
       const n = Number((r as Recipe).servings);
@@ -320,22 +356,51 @@ function buildRecipeImagePrompt(recipe: Recipe): string {
   return parts.filter(Boolean).join(" ");
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function generateRecipeImage(recipe: Recipe): Promise<string> {
   const client = getOpenAIClient();
   const prompt = buildRecipeImagePrompt(recipe);
 
-  const response = await client.images.generate({
-    model: "gpt-image-1",
-    prompt,
-    size: "1024x1024",
-    quality: "medium",
-  });
+  let lastErr: Error | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await client.images.generate({
+        model: "gpt-image-1",
+        prompt,
+        size: "auto",
+        quality: "low",
+        moderation: "low",
+        output_format: "jpeg",
+        output_compression: 82,
+      });
 
-  const imageBase64 = response.data?.[0]?.b64_json;
+      const imageBase64 = response.data?.[0]?.b64_json;
+      if (imageBase64) {
+        return `data:image/jpeg;base64,${imageBase64}`;
+      }
 
-  if (!imageBase64) {
-    throw new Error("Image generation returned no image data.");
+      const url = response.data?.[0]?.url;
+      if (url) {
+        return url;
+      }
+
+      lastErr = new Error("Image generation returned no image data.");
+    } catch (e) {
+      lastErr =
+        e instanceof Error ? e : new Error("Image generation request failed.");
+    }
+
+    if (attempt < 2) {
+      const msg = (lastErr?.message ?? "").toLowerCase();
+      const ms = msg.includes("429") || msg.includes("rate")
+        ? 900 * (attempt + 1)
+        : 500 * (attempt + 1);
+      await sleep(ms);
+    }
   }
 
-  return `data:image/png;base64,${imageBase64}`;
+  throw lastErr ?? new Error("Image generation failed.");
 }
