@@ -712,6 +712,25 @@ import {
     window.writeRecipeImageCache = function (cache) {
       localStorage.setItem(window.recipeImageCacheKey, JSON.stringify(cache));
     };
+    /** Match server `photoCacheKey` + `id` so the same dish hits localStorage across sessions. */
+    window.recipeImageCacheKeysFor = function (recipe) {
+      var keys = [];
+      if (recipe.photoCacheKey) keys.push(recipe.photoCacheKey);
+      if (recipe.id) keys.push(recipe.id);
+      var out = [];
+      var seen = {};
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i] && !seen[keys[i]]) {
+          seen[keys[i]] = true;
+          out.push(keys[i]);
+        }
+      }
+      return out;
+    };
+    window.recipeImageInflightKey = function (recipe) {
+      var keys = window.recipeImageCacheKeysFor(recipe);
+      return keys[0] || recipe.id || '';
+    };
     window.applyRecipeImageToCard = function (card, recipe, imageUrl) {
       if (!card || !recipe || !imageUrl) return;
       const nextRecipe = { ...recipe, imageUrl };
@@ -735,12 +754,19 @@ import {
       );
     };
     window.ensureRecipeImage = async function (recipe) {
-      if (!recipe || !recipe.id) throw new Error('Missing recipe for image');
+      if (!recipe || (!recipe.id && !recipe.photoCacheKey)) {
+        throw new Error('Missing recipe for image');
+      }
       if (recipe.imageUrl) return recipe.imageUrl;
-      const cache = window.readRecipeImageCache();
-      if (cache[recipe.id]) return cache[recipe.id];
-      if (window.recipeImageInflight.has(recipe.id)) {
-        return window.recipeImageInflight.get(recipe.id);
+      var lookupKeys = window.recipeImageCacheKeysFor(recipe);
+      var cache = window.readRecipeImageCache();
+      for (var ki = 0; ki < lookupKeys.length; ki++) {
+        if (cache[lookupKeys[ki]]) return cache[lookupKeys[ki]];
+      }
+      var inflightKey = window.recipeImageInflightKey(recipe);
+      if (!inflightKey) throw new Error('Missing recipe for image');
+      if (window.recipeImageInflight.has(inflightKey)) {
+        return window.recipeImageInflight.get(inflightKey);
       }
       const request = fetch('/api/bookmark-image', {
         method: 'POST',
@@ -765,14 +791,16 @@ import {
             );
           }
           const nextCache = window.readRecipeImageCache();
-          nextCache[recipe.id] = data.imageUrl;
+          for (var kj = 0; kj < lookupKeys.length; kj++) {
+            nextCache[lookupKeys[kj]] = data.imageUrl;
+          }
           window.writeRecipeImageCache(nextCache);
           return data.imageUrl;
         })
         .finally(() => {
-          window.recipeImageInflight.delete(recipe.id);
+          window.recipeImageInflight.delete(inflightKey);
         });
-      window.recipeImageInflight.set(recipe.id, request);
+      window.recipeImageInflight.set(inflightKey, request);
       return request;
     };
 

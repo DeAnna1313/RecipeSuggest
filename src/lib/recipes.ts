@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import OpenAI from "openai";
+import { generateRecipeImageWithGemini } from "./gemini-recipe-image";
+import { buildRecipePhotoCacheKey } from "./recipe-photo-cache-key";
 
 /** One recipe step: main action plus optional extra guidance (tips, temps, safety). */
 export interface RecipeInstructionStep {
@@ -18,6 +20,8 @@ export interface Recipe {
   /** Portions the ingredient amounts are written for (used for scaling). */
   servings?: number;
   imageUrl?: string;
+  /** Fingerprint for shared Netlify image cache; set when recipes are suggested. */
+  photoCacheKey?: string;
 }
 
 /** Normalize API/localStorage instructions (legacy string[] or partial objects). */
@@ -78,7 +82,7 @@ function getOpenAIClient() {
     throw new Error("OPENAI_API_KEY is not configured.");
   }
 
-  return new OpenAI({ apiKey });
+  return new OpenAI({ apiKey, timeout: 180_000 });
 }
 
 function normalizeConstraints(
@@ -287,7 +291,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
   const userPrompt = `I have these ingredients: ${ingredients.join(", ")}${constraintsPromptBlock(c)}${excludePrompt}`;
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-4o",
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -325,6 +329,7 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
       (r as Recipe).instructions = normalizeRecipeInstructions(
         (r as Recipe).instructions as unknown,
       );
+      (r as Recipe).photoCacheKey = buildRecipePhotoCacheKey(r as Recipe);
     }
   }
 
@@ -361,43 +366,28 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function generateRecipeImage(recipe: Recipe): Promise<string> {
-  const client = getOpenAIClient();
-  const prompt = buildRecipeImagePrompt(recipe);
+  const fullPrompt = buildRecipeImagePrompt(recipe);
+  /** Gemini 2.5 Flash Image supports long prompts; cap defensively. */
+  const prompt =
+    fullPrompt.length > 32_000
+      ? `${fullPrompt.slice(0, 31_997)}...`
+      : fullPrompt;
 
   let lastErr: Error | undefined;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const maxAttempts = 4;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const response = await client.images.generate({
-        model: "gpt-image-1",
-        prompt,
-        size: "auto",
-        quality: "low",
-        moderation: "low",
-        output_format: "jpeg",
-        output_compression: 82,
-      });
-
-      const imageBase64 = response.data?.[0]?.b64_json;
-      if (imageBase64) {
-        return `data:image/jpeg;base64,${imageBase64}`;
-      }
-
-      const url = response.data?.[0]?.url;
-      if (url) {
-        return url;
-      }
-
-      lastErr = new Error("Image generation returned no image data.");
+      return await generateRecipeImageWithGemini(prompt);
     } catch (e) {
       lastErr =
         e instanceof Error ? e : new Error("Image generation request failed.");
     }
 
-    if (attempt < 2) {
+    if (attempt < maxAttempts - 1) {
       const msg = (lastErr?.message ?? "").toLowerCase();
       const ms = msg.includes("429") || msg.includes("rate")
-        ? 900 * (attempt + 1)
-        : 500 * (attempt + 1);
+        ? 1200 * (attempt + 1)
+        : 650 * (attempt + 1);
       await sleep(ms);
     }
   }

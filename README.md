@@ -5,7 +5,8 @@ RecipeSuggest is an Astro app that accepts a list of ingredients and returns rec
 ## Requirements
 
 - Node `22.12.0` or `24.x`
-- **OpenAI** — `OPENAI_API_KEY` in `.env` for suggestions and optional dish images
+- **OpenAI** — `OPENAI_API_KEY` in `.env` for recipe suggestions (chat)
+- **Google AI** — `GEMINI_API_KEY` for dish images ([Gemini 2.5 Flash Image / Nano Banana](https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-image))
 - **Clerk** (optional for local smoke tests; CI uses placeholder keys):
   - `PUBLIC_CLERK_PUBLISHABLE_KEY`
   - `CLERK_SECRET_KEY`
@@ -18,7 +19,8 @@ Password reset is handled by Clerk's sign-in flow. To make the reset email and n
 
 | Variable | Purpose |
 | --- | --- |
-| `OPENAI_API_KEY` | Chat completions (`gpt-4o-mini`) and optional images (`gpt-image-1`) |
+| `OPENAI_API_KEY` | Chat completions for recipe suggestions (`gpt-4o`) |
+| `GEMINI_API_KEY` | Dish photos via `gemini-2.5-flash-image` (Nano Banana). Optional alias: `GOOGLE_API_KEY` |
 | `PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Sign-in and `Astro.locals.auth()` |
 | `NETLIFY_BLOB_*` | Set automatically on Netlify for `getStore()` (bookmarks + rate limits) |
 
@@ -62,9 +64,9 @@ Optional CI: copy `docs/github-actions-e2e.example.yml` to `.github/workflows/e2
 
 ## Deploy (Netlify)
 
-1. Connect the repo and set environment variables (`OPENAI_API_KEY`, Clerk keys).
+1. Connect the repo and set environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY`, Clerk keys).
 2. Use the Netlify Astro preset (this project uses `@astrojs/netlify`).
-3. Ensure **Netlify Blobs** are enabled for the site so bookmark and rate-limit stores work in production.
+3. Ensure **Netlify Blobs** are enabled for the site so bookmark, rate-limit, and **`recipe-photos`** (shared dish-image cache for all visitors) stores work in production.
 4. Optional: add deploy previews and verify Clerk allowed origins include preview URLs.
 
 ## Project files
@@ -75,7 +77,8 @@ src/pages/api/suggest.astro    — Recipe suggestions
 src/pages/api/bookmark-image.astro — Optional AI dish photo
 src/pages/api/bookmarks-data.astro — Blob sync for bookmarks
 src/pages/api/export-recipe-html.astro — Download printable HTML
-src/lib/recipes.ts             — OpenAI prompts and parsing
+src/lib/recipes.ts             — OpenAI recipe text; dish images via Gemini
+src/lib/gemini-recipe-image.ts — `gemini-2.5-flash-image` (Nano Banana) for photos
 src/lib/rate-limit-hybrid.ts  — Blob-backed limits with memory fallback
 public/styles/global.css       — Theme tokens (`data-theme` light/dark)
 ```

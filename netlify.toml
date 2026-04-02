@@ -8,6 +8,6 @@
 
 [build.environment]
   # Do not fail when these *values* appear in generated output (omit key names, not values).
-  SECRETS_SCAN_OMIT_KEYS = "OPENAI_API_KEY,CLERK_SECRET_KEY,PUBLIC_CLERK_PUBLISHABLE_KEY"
+  SECRETS_SCAN_OMIT_KEYS = "OPENAI_API_KEY,GEMINI_API_KEY,GOOGLE_API_KEY,CLERK_SECRET_KEY,PUBLIC_CLERK_PUBLISHABLE_KEY"
   # Extra guard: generated dirs (substring or glob — both forms are accepted).
   SECRETS_SCAN_OMIT_PATHS = "**/.netlify/**,**/dist/_astro/**"

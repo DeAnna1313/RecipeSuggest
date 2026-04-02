@@ -1,7 +1,7 @@
 ---
 import { generateRecipeImage, type Recipe } from "../../lib/recipes";
 import {
-  getCachedRecipePhoto,
+  findCachedRecipePhoto,
   setCachedRecipePhoto,
 } from "../../lib/recipe-image-blob";
 import { checkRateLimitHybrid } from "../../lib/rate-limit-hybrid";
@@ -17,11 +17,9 @@ try {
     return new Response("Invalid recipe payload.", { status: 400 });
   }
 
-  if (typeof recipe.id === "string" && recipe.id.trim()) {
-    const cached = await getCachedRecipePhoto(recipe.id.trim());
-    if (cached) {
-      return Response.json({ imageUrl: cached });
-    }
+  const cached = await findCachedRecipePhoto(recipe);
+  if (cached) {
+    return Response.json({ imageUrl: cached });
   }
 
   const auth = await Astro.locals.auth();
@@ -44,9 +42,7 @@ try {
 
   const imageUrl = await generateRecipeImage(recipe);
 
-  if (typeof recipe.id === "string" && recipe.id.trim()) {
-    await setCachedRecipePhoto(recipe.id.trim(), imageUrl);
-  }
+  await setCachedRecipePhoto(recipe, imageUrl);
 
   return Response.json({ imageUrl });
 } catch (error: unknown) {
