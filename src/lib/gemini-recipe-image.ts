@@ -16,6 +16,55 @@ export function getGeminiApiKey(): string {
   return apiKey.trim();
 }
 
+type GenImageRow = {
+  image?: { imageBytes?: string; mimeType?: string };
+};
+
+function dataUrlFromBase64(mime: string, b64: string): string {
+  const clean = b64.replace(/\s/g, "");
+  return `data:${mime};base64,${clean}`;
+}
+
+/** Supports multiple response shapes from the image-capable Gemini models. */
+export function extractImageDataUrlFromGeminiResponse(
+  response: unknown,
+): string | null {
+  if (!response || typeof response !== "object") return null;
+  const r = response as Record<string, unknown>;
+  const genImages = r.generatedImages as GenImageRow[] | undefined;
+  const gen = genImages?.[0]?.image;
+  if (gen?.imageBytes) {
+    const mime = gen.mimeType?.trim() || "image/png";
+    return dataUrlFromBase64(mime, gen.imageBytes);
+  }
+
+  const candidates = r.candidates as
+    | Array<{ content?: { parts?: unknown[] } }>
+    | undefined;
+  for (const c of candidates ?? []) {
+    for (const rawPart of c.content?.parts ?? []) {
+      const part = rawPart as Record<string, unknown>;
+      const inline = part.inlineData as
+        | { data?: string; mimeType?: string }
+        | undefined;
+      if (inline?.data && typeof inline.data === "string") {
+        const mime = inline.mimeType?.trim() || "image/png";
+        return dataUrlFromBase64(mime, inline.data);
+      }
+      const legacy = part.inline_data as
+        | { data?: string; mime_type?: string; mimeType?: string }
+        | undefined;
+      if (legacy?.data && typeof legacy.data === "string") {
+        const mime =
+          (legacy.mime_type ?? legacy.mimeType)?.trim() || "image/png";
+        return dataUrlFromBase64(mime, legacy.data);
+      }
+    }
+  }
+
+  return null;
+}
+
 /**
  * Text-to-image for recipe card photos. Returns a data URL (PNG or JPEG per API).
  */
@@ -26,29 +75,24 @@ export async function generateRecipeImageWithGemini(prompt: string): Promise<str
     model: GEMINI_RECIPE_IMAGE_MODEL,
     contents: prompt,
     config: {
-      responseModalities: [Modality.IMAGE],
+      // Image models expect both modalities per Google image-generation docs.
+      responseModalities: [Modality.TEXT, Modality.IMAGE],
       imageConfig: {
         aspectRatio: "1:1",
       },
     },
   });
 
-  const blockReason =
-    response.promptFeedback?.blockReason ??
-    response.candidates?.[0]?.finishReason;
+  const ext = extractImageDataUrlFromGeminiResponse(response);
+  if (ext) return ext;
+
   if (!response.candidates?.length) {
-    const hint =
-      typeof blockReason === "string" ? ` (${blockReason})` : "";
+    const block = response.promptFeedback?.blockReason;
+    const hint = block ? ` (${String(block)})` : "";
     throw new Error(`Gemini returned no image candidates${hint}.`);
   }
 
-  const parts = response.candidates[0]?.content?.parts ?? [];
-  for (const part of parts) {
-    const inline = part.inlineData;
-    if (inline?.data && inline?.mimeType) {
-      return `data:${inline.mimeType};base64,${inline.data}`;
-    }
-  }
-
-  throw new Error("Gemini returned no inline image data.");
+  throw new Error(
+    "Gemini returned no image bytes (no inline_data / generatedImages).",
+  );
 }

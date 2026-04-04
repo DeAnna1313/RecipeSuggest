@@ -790,11 +790,15 @@ import {
               typeof data.error === 'string' ? data.error : 'Image request failed',
             );
           }
-          const nextCache = window.readRecipeImageCache();
-          for (var kj = 0; kj < lookupKeys.length; kj++) {
-            nextCache[lookupKeys[kj]] = data.imageUrl;
+          try {
+            const nextCache = window.readRecipeImageCache();
+            for (var kj = 0; kj < lookupKeys.length; kj++) {
+              nextCache[lookupKeys[kj]] = data.imageUrl;
+            }
+            window.writeRecipeImageCache(nextCache);
+          } catch (_e) {
+            /* localStorage quota or privacy mode — still show the image */
           }
-          window.writeRecipeImageCache(nextCache);
           return data.imageUrl;
         })
         .finally(() => {
