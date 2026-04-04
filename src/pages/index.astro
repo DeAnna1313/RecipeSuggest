@@ -381,7 +381,12 @@ import {
         </div>
 
         <div class="modal__media" x-show="activeRecipe.imageUrl || previewImageLoading">
-          <img :src="activeRecipe.imageUrl" :alt="activeRecipe.title" class="modal__photo" />
+          <img
+            x-show="activeRecipe.imageUrl"
+            :src="activeRecipe.imageUrl || ''"
+            :alt="activeRecipe.title"
+            class="modal__photo"
+          />
           <div class="recipe-card__placeholder recipe-card__placeholder--loading no-print" x-show="previewImageLoading && !activeRecipe.imageUrl">
             Generating finished dish photo...
           </div>
@@ -731,13 +736,48 @@ import {
       var keys = window.recipeImageCacheKeysFor(recipe);
       return keys[0] || recipe.id || '';
     };
+    /**
+     * Fill imageUrl from localStorage or the card's <img> when data-recipe omits it
+     * (large data URLs are not stored on data-recipe to avoid attribute/size limits).
+     */
+    window.mergeRecipeImageHints = function (recipe, cardRoot) {
+      var out = Object.assign({}, recipe);
+      if (out.imageUrl && String(out.imageUrl).length > 0) return out;
+      if (typeof window.readRecipeImageCache === 'function' && typeof window.recipeImageCacheKeysFor === 'function') {
+        var keys = window.recipeImageCacheKeysFor(out);
+        var cache = window.readRecipeImageCache();
+        for (var i = 0; i < keys.length; i++) {
+          if (cache[keys[i]]) {
+            out.imageUrl = cache[keys[i]];
+            return out;
+          }
+        }
+      }
+      if (cardRoot && cardRoot.querySelector) {
+        var img = cardRoot.querySelector('.recipe-card__image');
+        if (img && img.src) {
+          var s = img.src;
+          if (/^data:image\//.test(s) || /^https?:\/\//.test(s)) {
+            out.imageUrl = s;
+            return out;
+          }
+        }
+      }
+      return out;
+    };
     window.applyRecipeImageToCard = function (card, recipe, imageUrl) {
       if (!card || !recipe || !imageUrl) return;
       const nextRecipe = { ...recipe, imageUrl };
-      card.dataset.recipe = window.encodeRecipeData(nextRecipe);
+      /** Keep data-recipe small: huge base64 breaks attribute limits & modal JSON. */
+      var maxInlineUrl = 10000;
+      var forAttr =
+        String(imageUrl).length > maxInlineUrl
+          ? Object.assign({}, nextRecipe, { imageUrl: undefined })
+          : nextRecipe;
+      card.dataset.recipe = window.encodeRecipeData(forAttr);
       const bookmarkBtn = card.querySelector('.recipe-card__bookmark');
       if (bookmarkBtn) {
-        bookmarkBtn.dataset.recipe = window.encodeRecipeData(nextRecipe);
+        bookmarkBtn.dataset.recipe = window.encodeRecipeData(forAttr);
       }
       const img = card.querySelector('.recipe-card__image');
       const placeholder = card.querySelector('.recipe-card__placeholder');
@@ -749,7 +789,11 @@ import {
       card.classList.add('recipe-card--has-image');
       document.dispatchEvent(
         new CustomEvent('recipe-image-ready', {
-          detail: { id: nextRecipe.id, imageUrl },
+          detail: {
+            id: nextRecipe.id,
+            photoCacheKey: nextRecipe.photoCacheKey,
+            imageUrl,
+          },
         }),
       );
     };
@@ -811,7 +855,16 @@ import {
     window.dispatchOpenRecipe = function (el) {
       const raw = el && el.dataset ? el.dataset.recipe : null;
       if (!raw) return;
-      const detail = JSON.parse(decodeURIComponent(escape(atob(raw))));
+      let detail;
+      try {
+        detail = JSON.parse(decodeURIComponent(escape(atob(raw))));
+      } catch (_e) {
+        return;
+      }
+      const card = el && el.closest ? el.closest('.recipe-card') : null;
+      if (typeof window.mergeRecipeImageHints === 'function') {
+        detail = window.mergeRecipeImageHints(detail, card || el);
+      }
       const app = document.querySelector('[data-testid="recipe-app"]');
       const target = app || document.documentElement;
       target.dispatchEvent(
@@ -1339,11 +1392,15 @@ import {
         },
 
         openModal(recipe) {
+          const merged =
+            typeof window.mergeRecipeImageHints === 'function'
+              ? window.mergeRecipeImageHints(recipe, null)
+              : recipe;
           const normalized =
             typeof window.normalizeRecipeInstructions === 'function'
-              ? window.normalizeRecipeInstructions(recipe.instructions)
-              : recipe.instructions || [];
-          this.activeRecipe = { ...recipe, instructions: normalized };
+              ? window.normalizeRecipeInstructions(merged.instructions)
+              : merged.instructions || [];
+          this.activeRecipe = { ...merged, instructions: normalized };
           const base = this.recipeBaseServings();
           this.modalTargetServings = base;
           this.modalOpen = true;
@@ -1959,7 +2016,13 @@ import {
 
           document.addEventListener('recipe-image-ready', (evt) => {
             const detail = evt.detail || {};
-            if (detail.id && this.activeRecipe.id === detail.id && detail.imageUrl) {
+            if (!detail.imageUrl) return;
+            const sameId = detail.id && this.activeRecipe.id === detail.id;
+            const samePhotoKey =
+              detail.photoCacheKey &&
+              this.activeRecipe.photoCacheKey &&
+              detail.photoCacheKey === this.activeRecipe.photoCacheKey;
+            if (sameId || samePhotoKey) {
               this.activeRecipe = {
                 ...this.activeRecipe,
                 imageUrl: detail.imageUrl,
