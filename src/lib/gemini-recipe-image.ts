@@ -3,7 +3,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 /** Gemini 2.5 Flash Image — "Nano Banana" (Google AI). */
 export const GEMINI_RECIPE_IMAGE_MODEL = "gemini-2.5-flash-image";
 
-function getGeminiApiKey(): string {
+export function getGeminiApiKey(): string {
   const apiKey =
     import.meta.env.GEMINI_API_KEY ??
     process.env.GEMINI_API_KEY ??

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import OpenAI from "openai";
 import { generateRecipeImageWithGemini } from "./gemini-recipe-image";
+import { generateRecipesJsonWithGemini } from "./gemini-recipe-suggest";
 import { buildRecipePhotoCacheKey } from "./recipe-photo-cache-key";
 
 /** One recipe step: main action plus optional extra guidance (tips, temps, safety). */
@@ -73,17 +73,6 @@ export interface SuggestConstraints {
 
 /* ── In-memory response cache ────────────────── */
 const cache = new Map<string, Recipe[]>();
-
-function getOpenAIClient() {
-  const apiKey =
-    import.meta.env.OPENAI_API_KEY ?? process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured.");
-  }
-
-  return new OpenAI({ apiKey, timeout: 180_000 });
-}
 
 function normalizeConstraints(
   c: SuggestConstraints | undefined,
@@ -235,8 +224,6 @@ export async function suggestRecipes(
     return cache.get(key)!;
   }
 
-  const client = getOpenAIClient();
-
   const systemPrompt = `You are a careful cooking coach for beginners (including teenagers with little kitchen experience). The user lists ingredients they already have. Suggest exactly 4 recipes that work well with those ingredients.
 
 Grounding and honesty (NON-NEGOTIABLE):
@@ -290,27 +277,32 @@ Return ONLY valid JSON — no markdown, no code fences, no commentary. The JSON 
     : "";
   const userPrompt = `I have these ingredients: ${ingredients.join(", ")}${constraintsPromptBlock(c)}${excludePrompt}`;
 
-  const response = await client.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    temperature: 0.72,
-    max_tokens: 5000,
-  });
-
-  const raw = response.choices[0]?.message?.content?.trim() ?? "[]";
+  const raw = await generateRecipesJsonWithGemini(systemPrompt, userPrompt);
 
   let recipes: Recipe[];
   try {
     recipes = JSON.parse(raw);
   } catch {
-    // Try extracting JSON from markdown code fences just in case
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (match) {
-      recipes = JSON.parse(match[0]);
+    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenced) {
+      try {
+        recipes = JSON.parse(fenced[1].trim());
+      } catch {
+        recipes = [] as Recipe[];
+      }
     } else {
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (match) {
+        try {
+          recipes = JSON.parse(match[0]);
+        } catch {
+          recipes = [] as Recipe[];
+        }
+      } else {
+        recipes = [] as Recipe[];
+      }
+    }
+    if (!Array.isArray(recipes) || recipes.length === 0) {
       throw new Error("AI returned invalid JSON.");
     }
   }
