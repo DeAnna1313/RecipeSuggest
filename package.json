@@ -9,17 +9,21 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@alpinejs/collapse": "^3.15.8",
     "@astrojs/alpinejs": "^0.4.0",
     "@astrojs/netlify": "^7.0.4",
     "@clerk/astro": "^3.0.7",
+    "@google/genai": "^1.48.0",
     "@netlify/blobs": "^10.7.4",
     "@types/alpinejs": "^3.13.10",
     "alpinejs": "^3.15.8",
-    "astro": "^6.0.8",
-    "openai": "^4.77.0"
+    "astro": "^6.0.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
   }
 }

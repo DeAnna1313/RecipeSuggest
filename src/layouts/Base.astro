@@ -11,11 +11,39 @@ const { title = 'RecipeSuggest — AI Recipe Finder' } = Astro.props;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Type your ingredients and get AI-powered recipe suggestions instantly." />
     <title>{title}</title>
+    <script is:inline>
+      (function () {
+        function applyTheme() {
+          var saved = localStorage.getItem("recipesuggest_theme");
+          var theme =
+            saved === "light" || saved === "dark"
+              ? saved
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          document.documentElement.setAttribute("data-theme", theme);
+        }
+        applyTheme();
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () {
+          if (localStorage.getItem("recipesuggest_theme")) return;
+          applyTheme();
+        });
+        window.toggleRecipeSuggestTheme = function () {
+          var cur = document.documentElement.getAttribute("data-theme") || "dark";
+          var next = cur === "dark" ? "light" : "dark";
+          localStorage.setItem("recipesuggest_theme", next);
+          document.documentElement.setAttribute("data-theme", next);
+        };
+      })();
+    </script>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,450;0,9..144,600;0,9..144,700;1,9..144,450&family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+      rel="stylesheet"
+    />
 
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
@@ -39,6 +67,20 @@ const { title = 'RecipeSuggest — AI Recipe Finder' } = Astro.props;
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ recipes: list }),
+              });
+            } catch (_e) {}
+          }, 900);
+        };
+        var tPrefs;
+        window.queueSearchPreferencesSync = function (preferences) {
+          clearTimeout(tPrefs);
+          tPrefs = setTimeout(async function () {
+            try {
+              await fetch("/api/search-preferences", {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ preferences: preferences || {} }),
               });
             } catch (_e) {}
           }, 900);
